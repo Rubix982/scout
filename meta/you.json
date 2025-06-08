@@ -1,0 +1,38 @@
+{
+    "name": "Saif Ul Islam",
+    "title": "Backend & DevOps Engineer",
+    "location": "Karachi, Pakistan",
+    "email": "saifulislam84210@gmai.com",
+    "github": {
+        "url": "https://github.com/Rubix982",
+        "blurb": "I build tools in Go, Python, and Rust to automate cloud security workflows."
+    },
+    "linkedin": {
+        "url": "https://linkedin.com/in/suislam",
+        "headline": "Building scalable systems | AI + Security | Open to collaboration"
+    },
+    "resume": {
+        "blurb": "Backend and DevOps engineer with 3 years of experience across high-scale infrastructure, cloud security, and data pipelines. I've built connector frameworks, IAM orchestration, and performance-tuned ingestion systems at Securiti.ai using Go, Kubernetes, Temporal, and DuckDB. Previously, I optimized large-scale .NET applications and led automation efforts at Astera. Passionate about DevSecOps, observability, and systems that scale securely."
+    },
+    "interests": [
+        "Cloud security",
+        "Graph analysis",
+        "AI infrastructure",
+        "DevOps automation",
+        "Open research platforms"
+    ],
+    "highlight_projects": [
+        {
+            "name": "Scout",
+            "description": "A personal outreach automation system using DuckDB, OpenAI, and Google Sheets for cold email generation and contact intelligence."
+        },
+        {
+            "name": "form_log",
+            "description": "Rust CLI to track daily workouts with home directory storage and simple analytics."
+        }
+    ],
+    "tone_preference": "Respectful, technical, and warm",
+    "signature": {
+        "text": "Saif Ul Islam\nBackend & Infra Engineer\nGitHub: github.com/Rubix982\nLinkedIn: linkedin.com/in/suislam"
+    }
+}

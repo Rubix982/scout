@@ -20,7 +20,7 @@ Scout is a personal outreach intelligence system to help you:
     - [Step 3: Metadata Enrichment Pipeline](#step-3-metadata-enrichment-pipeline)
       - [🎯 Trigger Condition](#-trigger-condition)
       - [📤 Input Data Required per Row](#-input-data-required-per-row)
-      - [🔍 1: Perplexity API Queries](#-1-perplexity-api-queries)
+      - [🔍 1: OpenAI API Search + Reasoning](#-1-openai-api-search--reasoning)
       - [🧠 2: OpenAI Prompt — Company Intelligence Prompt](#-2-openai-prompt--company-intelligence-prompt)
       - [💾 3: Store Result in DuckDB](#-3-store-result-in-duckdb)
     - [Step 4: Contact Intelligence Metadata Generation](#step-4-contact-intelligence-metadata-generation)
@@ -59,9 +59,10 @@ Scout is a personal outreach intelligence system to help you:
 
 ## Config Files
 
-- `you.json`: Stores personal info like GitHub, resume blurb, LinkedIn
+- `meta/you.json`: Stores personal info like GitHub, resume blurb, LinkedIn
 - `prompts/`: Directory for templated messages (e.g. `intent_learning.j2`)
-- `.env`: Contains API keys and optional base configuration
+- `.env` files: Contains API keys and optional base configuration. Please check the following env files,
+  - `secrets/gcp/.env`
 
 ## System Flow
 
@@ -137,19 +138,23 @@ WHERE company_processed = FALSE
 
 ---
 
-#### 🔍 1: Perplexity API Queries
+#### 🔍 1: OpenAI API Search + Reasoning
 
-Perform 3-5 natural-language queries to Perplexity (or similar search/LLM wrapper).
+Use GPT-4 (or GPT-4o) to simulate web-like search by asking multi-turn prompts, such as:
 
-| Query                                             | Purpose                                                   |
-| ------------------------------------------------- | --------------------------------------------------------- |
-| "What does \[Company] do?"                        | To get the core product/service and mission               |
-| "What recent news is available about \[Company]?" | To populate `recent_news`                                 |
-| "Who has invested in \[Company]?"                 | To get `investors`, `funding_stage`                       |
-| "What technologies does \[Company] use?"          | For `technologies_used`, `tags`                           |
-| "Where is \[Company]'s HQ?"                       | For `industry`, `location`, `website_url` (if detectable) |
+| Prompt                                              | Field Mapped To                 |
+| :-------------------------------------------------- | :------------------------------ |
+| "What does the company {{company}} do?"             | summary, product                |
+| "Who are the investors in {{company}}?"             | investors, funding_stage        |
+| "Any recent news about {{company}}?"                | recent_news                     |
+| "What technology stack does {{company}} use?"       | technologies_used, tags         |
+| "Which roles at {{company}} are best for outreach?" | ideal_roles                     |
+| "What industry is {{company}} in?"                  | industry, website_url, location |
+|                                                     |                                 |
 
 💡 Store raw responses for debugging or retry logic.
+📝 You may ask these questions in one or two combined prompts for efficiency.
+📦 Optionally store intermediate answers in debug mode.
 
 ---
 
@@ -165,6 +170,12 @@ Perform 3-5 natural-language queries to Perplexity (or similar search/LLM wrappe
 > **Recent news:** {{perplexity\_recent\_news}}
 > **Key people found:** {{perplexity\_people}}
 > **Tech stack / tools:** {{perplexity\_stack}}
+> **What they do:** {{q1_response}}
+> **Recent news:** {{q2_response}}
+> **Investors & funding:** {{q3_response}}
+> **Tech stack:** {{q4_response}}
+> **Outreach roles / tone:** {{q5_response}}
+> **Industry & website:** {{q6_response}}
 >
 > Please return a structured JSON object with:
 >
@@ -183,6 +194,29 @@ Perform 3-5 natural-language queries to Perplexity (or similar search/LLM wrappe
 > * `industry` (broad sector label)
 > * `linkedin_company_url` (guess or generate using company name)
 > * `linkedin_search_links` (list of search URLs for ideal roles)
+>
+> Sample JSON object,
+> ```json
+> {
+>  "summary": "...",
+>  "product": "...",
+>  "tags": ["...", "..."],
+>  "investors": ["...", "..."],
+>  "ideal_roles": "...",
+>  "recent_news": "...",
+>  "tone_advice": "...",
+>  "alignment_reason": "...",
+>  "suggested_opener": "...",
+>  "funding_stage": "...",
+>  "technologies_used": "...",
+>  "website_url": "...",
+>  "industry": "...",
+>  "linkedin_company_url": "...",
+>  "linkedin_search_links": ["...", "..."]
+> }
+> ```
+
+📌 You can define function calls in OpenAI to enforce this structure.
 
 ---
 
