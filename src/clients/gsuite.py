@@ -14,10 +14,11 @@ from google.oauth2.service_account import Credentials
 
 from src import config
 
-SCOPES = [
-    "https://www.googleapis.com/auth/spreadsheets.readonly",
-    "https://www.googleapis.com/auth/drive.readonly",
-]
+# Least privilege: read-only, and only Sheets. `drive.readonly` was requested but
+# never used -- nothing here calls Drive (open_by_url resolves via the Sheets API
+# alone), and the Drive API is not even enabled on the project. Scout never
+# writes to the sheet; see decisions.md -> "[O-004] The sheet is input-only".
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 
 SheetRow = Dict[str, Union[int, float, str]]
 
