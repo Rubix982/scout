@@ -25,6 +25,16 @@ def _tables(con: duckdb.DuckDBPyConnection) -> set[str]:
     return {row[0] for row in con.execute("SHOW TABLES").fetchall()}
 
 
+def _schema(con: duckdb.DuckDBPyConnection) -> set[tuple[str, str]]:
+    """(table, column) pairs. Comparing table *names* alone is not enough --
+    migration 003 only adds a column, so a name-only comparison would pass even
+    if the ALTER never applied."""
+    rows = con.execute(
+        "SELECT table_name, column_name FROM information_schema.columns"
+    ).fetchall()
+    return {(t, c) for t, c in rows}
+
+
 @pytest.fixture
 def migrated_db(isolate_database):
     init_tables()
@@ -78,7 +88,10 @@ def test_fresh_and_preexisting_databases_converge(tmp_path):
     assert [m.version for m in applied] == [m.version for m in MIGRATIONS]
 
     assert _tables(legacy) == _tables(fresh)
+    assert _schema(legacy) == _schema(fresh), "column-level divergence"
     assert current_version(legacy) == current_version(fresh)
+    # The column migration 003 adds must actually be present in both.
+    assert ("companies", "entity_type") in _schema(fresh)
 
     fresh.close()
     legacy.close()

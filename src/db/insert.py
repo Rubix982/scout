@@ -10,13 +10,18 @@ broke the insert silently.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Dict, List, Mapping, Sequence, Tuple
+from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, List, Mapping, Sequence, Tuple
 
+from src.common import entities
 from src.db.init import get_con
 from src.log import get_logger
 
 logger = get_logger("sync")
+
+
+class SyncError(RuntimeError):
+    """A row could not be synced; the message names the offending row."""
 
 
 @dataclass(frozen=True)
@@ -26,6 +31,10 @@ class SheetTable:
     table: str
     primary_key: str
     columns: Mapping[str, str]  # sheet header -> db column
+    # db column -> validator. Applied after `normalize`; raising ValueError
+    # fails the sync with the offending row named, rather than coercing a bad
+    # value into something plausible.
+    validators: Mapping[str, Callable[[str], str]] = field(default_factory=dict)
 
     @property
     def db_columns(self) -> Tuple[str, ...]:
@@ -35,6 +44,14 @@ class SheetTable:
     def compare_columns(self) -> Tuple[str, ...]:
         return tuple(c for c in self.db_columns if c != self.primary_key)
 
+    @property
+    def primary_key_header(self) -> str:
+        """The sheet header that maps to the primary key, for error messages."""
+        for header, db_col in self.columns.items():
+            if db_col == self.primary_key:
+                return header
+        raise KeyError(f"no sheet header maps to primary key {self.primary_key!r}")
+
 
 COMPANIES = SheetTable(
     table="companies",
@@ -43,7 +60,9 @@ COMPANIES = SheetTable(
         "Company Name": "company_name",
         "Comments": "comments",
         "Link": "link",
+        "Type": "entity_type",
     },
+    validators={"entity_type": entities.parse},
 )
 
 
@@ -64,11 +83,16 @@ def normalize(value: Any) -> str:
 
 
 def to_db_row(spec: SheetTable, sheet_row: Mapping[str, Any]) -> Dict[str, str]:
-    """Project a sheet record onto db columns via the explicit mapping."""
-    return {
-        db_col: normalize(sheet_row.get(header))
-        for header, db_col in spec.columns.items()
-    }
+    """Project a sheet record onto db columns via the explicit mapping.
+
+    Validators run here, so a bad value is rejected before it can reach storage.
+    """
+    record: Dict[str, str] = {}
+    for header, db_col in spec.columns.items():
+        value = normalize(sheet_row.get(header))
+        validator = spec.validators.get(db_col)
+        record[db_col] = validator(value) if validator else value
+    return record
 
 
 @dataclass(frozen=True)
@@ -104,7 +128,11 @@ def compute_plan(
     seen: set[str] = set()
 
     for sheet_row in incoming:
-        record = to_db_row(spec, sheet_row)
+        try:
+            record = to_db_row(spec, sheet_row)
+        except ValueError as exc:
+            name = normalize(sheet_row.get(spec.primary_key_header)) or "(unnamed row)"
+            raise SyncError(f"{spec.table}: row {name!r}: {exc}") from exc
         key = record[spec.primary_key]
         if not key:
             logger.warning("[SYNC] skipping row with empty %s", spec.primary_key)

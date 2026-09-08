@@ -128,9 +128,9 @@ def test_get_gsheet_client():
 def test_get_companies_reads_the_real_sheet():
     rows = gsuite.get_companies()
     assert isinstance(rows, list) and rows
-    assert set(rows[0]) == {"Company Name", "Comments", "Link"}, (
-        "unexpected columns -- has the sheet gained Type/Board URL? that is E-010"
-    )
+    # `Board URL` is read by E-011, not yet mapped -- present in the sheet and
+    # deliberately ignored by the current SheetTable.
+    assert {"Company Name", "Comments", "Link", "Type"} <= set(rows[0])
     assert all(k.strip() for k in rows[0]), "phantom column leaked through"
 
 

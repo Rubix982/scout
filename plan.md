@@ -165,7 +165,7 @@ Execution order, not ID order.
 | 3 | E-008 | Engineer   | Single config layer                          | closed | 1 |
 | 4 | E-009 | Engineer   | Storage schema coherence + migrations        | closed | 1 |
 | 5 | E-002 | Engineer   | Reconcile Sheets ingest with the real sheet  | closed | 1 |
-| 6 | E-010 | Engineer   | Entity taxonomy: employers vs sources        | open   | 2 |
+| 6 | E-010 | Engineer   | Entity taxonomy: employers vs sources        | closed | 2 |
 | 7 | E-011 | Engineer   | Board URL as primary resolution path         | open   | 2 |
 | 8 | E-003 | Engineer   | ATS adapters: Greenhouse/EU, Lever, Ashby    | open   | 2 |
 | 9 | E-005 | Engineer   | Role snapshots + run-over-run diffing        | open   | 2 |
@@ -178,7 +178,7 @@ Execution order, not ID order.
 | ID    | Blocked By                                        |
 | ----- | ------------------------------------------------- |
 | E-002 | — (unblocked; Sheets access now verified working) |
-| E-010 | — (unblocked; needs `Type` column in the sheet)   |
+| E-011 | — (unblocked; 8 of 13 employers lack a Board URL) |
 | E-011 | E-010                                             |
 | E-003 | E-011                                             |
 | E-004 | E-011 (deferred to Phase 3 — assist only)         |
@@ -200,12 +200,13 @@ Execution order, not ID order.
 - O-003 · Design re-pass — employers vs sources; opened E-010, E-011, T-006
 - O-004 · Sheet is input-only; Scout stays read-only, scopes narrowed to one
 - E-002 · Single-sheet ingest live — 36 companies synced, second run reports 0 changes
+- E-010 · Entity taxonomy live — 13 employers, 13 sources, 10 unclassified
 
 ## Next Orchestrator Action
 
 Phase 1 is complete and the pipeline runs end-to-end against the live sheet.
 
-Before E-010 can be built, Saif needs to add two columns to the sheet — `Type`
-and `Board URL` — since both are user-maintained by design (auto-classification
-was rejected in O-003). A pre-filled proposal for all 36 rows, with 11 rows
-flagged uncertain, is in `agents/shared/entity_classification_proposal.md`.
+Both columns are in the sheet and E-010 is closed. E-011 is unblocked and can
+parse the 5 board URLs present, but 8 of the 13 employers still have none — that
+is the gating input for roles actually landing in the database. See
+`agents/shared/employers_needing_board_urls.md`.

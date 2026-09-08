@@ -61,19 +61,33 @@ def test_normalize_reconciles_sheet_strings_with_duckdb_natives():
 
 
 def test_to_db_row_uses_the_explicit_mapping():
+    # No `Type` key in the row, so the entity_type validator yields "unknown"
+    # rather than defaulting to "employer" (E-010).
     assert to_db_row(COMPANIES, row("wolt", "note", "http://x")) == {
         "company_name": "wolt",
         "comments": "note",
         "link": "http://x",
+        "entity_type": "unknown",
     }
 
 
+def test_to_db_row_applies_validators():
+    r = row("wolt")
+    r["Type"] = "  EMPLOYER "
+    assert to_db_row(COMPANIES, r)["entity_type"] == "employer"
+
+
 def test_to_db_row_ignores_unmapped_sheet_columns():
-    """A phantom or newly-added column must not reach the insert."""
+    """A phantom or not-yet-mapped column must not reach the insert."""
     r = row("wolt")
     r[""] = "phantom"
-    r["Type"] = "employer"  # arrives in E-010; must be ignored until mapped
-    assert set(to_db_row(COMPANIES, r)) == {"company_name", "comments", "link"}
+    r["Board URL"] = "http://boards"  # mapped by E-011, not yet
+    assert set(to_db_row(COMPANIES, r)) == {
+        "company_name",
+        "comments",
+        "link",
+        "entity_type",
+    }
 
 
 def test_compare_columns_excludes_the_primary_key():

@@ -167,12 +167,23 @@ _COMPANIES = (
     """,
 )
 
+# --- 003: entity_type (E-010) -------------------------------------------------
+# The first migration that reshapes an EXISTING table, which is exactly what
+# `CREATE TABLE IF NOT EXISTS` could never do: on a database already holding the
+# 36 synced companies, the old approach would silently skip this and leave the
+# code reading a column that does not exist.
+#
+# Default is 'unknown', never 'employer' -- see src/common/entities.py::parse.
+_ENTITY_TYPE = (
+    "ALTER TABLE companies ADD COLUMN IF NOT EXISTS entity_type TEXT DEFAULT 'unknown';",
+)
+
 MIGRATIONS: Tuple[Migration, ...] = (
     Migration(version=1, name="baseline", statements=_BASELINE),
     Migration(version=2, name="companies", statements=_COMPANIES),
+    Migration(version=3, name="entity_type", statements=_ENTITY_TYPE),
     # Remaining tracker tables are added by their owning tickets:
-    #   003 entity_type + board_url (E-010, E-011)
-    #   004 company_ats             (E-011)
+    #   004 board_url + company_ats (E-011)
     #   005 roles + runs            (E-005)
 )
 

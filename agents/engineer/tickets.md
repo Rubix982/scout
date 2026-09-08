@@ -560,7 +560,7 @@ Added a rollback test asserting a failing migration leaves no partial schema.
 
 ### E-010 · Entity taxonomy: separate employers from sources
 
-**Status:** open
+**Status:** closed
 **Type:** implement
 **Priority:** high
 **Created:** 2026-09-08
@@ -604,9 +604,50 @@ resolution is 5/19.
   count, not in the employer set.
 - An unrecognised type value fails the sync with a message naming the row.
 
+**Result — live against the real sheet:**
+
+```
+run 1:  ~26 changed, =10 unchanged   (migration 003 applied to an EXISTING 36-row db)
+run 2:  ~0  changed, =36 unchanged
+  tracked as employers: 13
+  excluded as sources:  13
+  unclassified:         10  <- blank Type; not assumed to be employers
+```
+
+13 + 13 + 10 = 36. Migration 003 reshaping a populated table is precisely the
+case `CREATE TABLE IF NOT EXISTS` would have silently skipped, which is why
+E-009 came first.
+
+- `src/common/entities.py` — `EntityType` with `is_source`. `parse()` maps blank
+  to `unknown` and **raises** on an unrecognised value; a typo must not become
+  `unknown` either, or the same silence returns by another route.
+  `unknown` is deliberately *not* a source, so it stays visible in its own count
+  rather than being absorbed into the excluded total.
+- `SheetTable` gained a `validators` hook (db column → callable) applied inside
+  `to_db_row`, so a bad value is rejected before it can reach storage. Validation
+  runs during `compute_plan`, before `apply_plan`, so a rejected row leaves no
+  partial write — asserted by `test_a_rejected_row_does_not_partially_write`.
+- `src/db/companies.py` — `employers()` / `sources()` / `unclassified()`, with a
+  test that the three buckets *partition* the list so no row can be silently
+  dropped or double-counted.
+- `main.py` states coverage explicitly. R-002's 19% was measured against a
+  population that silently included 16 non-employers; the counts are now printed
+  rather than implied.
+
+**Test gap found and closed:** `test_fresh_and_preexisting_databases_converge`
+compared table *names* only, so it would have passed even if migration 003's
+`ALTER` never applied. Now compares `(table, column)` pairs — demonstrated that
+with 003 skipped the table names stay identical while the column set differs by
+exactly `('companies', 'entity_type')`.
+
+**Suite:** 74 passed (was 47).
+
 **Blockers:** E-002
-**Artifacts:** `src/db/migrations.py`, `src/db/companies.py`, `tests/`
-**Closed:** —
+**Artifacts:** `src/common/entities.py`, `src/db/migrations.py`,
+`src/db/companies.py`, `src/db/insert.py`, `src/main.py`,
+`tests/test_entities.py`, `tests/test_companies.py`, `tests/test_sync.py`,
+`tests/test_duckdb.py`, `tests/test_gsuite.py`
+**Closed:** 2026-09-08
 
 ---
 

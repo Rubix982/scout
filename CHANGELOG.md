@@ -3,6 +3,7 @@
 ## 2026-09-08 · Session 1 (revival)
 
 - [R-001] ATS endpoint feasibility measured — findings in `agents/shared/findings.md`, probe scripts in `agents/researcher/findings/`
+- [E-010] Entity taxonomy live — employers separated from sources; 13 employers, 13 sources, 10 unclassified. Migration 003 reshapes a populated table; converge test strengthened to column level
 - [E-002] Single-sheet ingest against the live sheet — 36 companies, second run reports 0 changes; declarative `SheetTable` mapping, type-coercion fix, phantom-column stripping, gspread error unmasking. **Phase 1 complete.**
 - [R-002] ATS resolution measured at 19% across all 36 rows — falsification criterion failed; link-seeding contributed 0
 - [O-003] Design re-pass — employers vs sources as distinct entity kinds; opened E-010, E-011, T-006; re-scoped E-002/E-003/E-004
