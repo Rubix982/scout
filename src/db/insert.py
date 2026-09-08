@@ -1,12 +1,10 @@
-import duckdb
-from typing import List, Dict, Any, Tuple
-from src.db.init import DB_PATH
-from src.log import get_logger
+from typing import Any, Dict, List, Tuple
+
 from src.common.utils import prettify_column_names
+from src.db.init import get_con
+from src.log import get_logger
 
 logger = get_logger("insert_ops")
-
-con: duckdb.DuckDBPyConnection = duckdb.connect(str(DB_PATH))  # type: ignore
 
 
 def get_columns_for_table(table_name: str) -> List[str]:
@@ -105,7 +103,7 @@ def insert_into_table(table_name: str, data: List[Dict[str, Any]]) -> None:
             values = [
                 row.get(col_title) for col_title in prettify_column_names(columns)
             ]
-            con.execute(query, values)
+            get_con().execute(query, values)
         except Exception as e:
             logger.error(
                 f"[INSERT] Failed to insert row with key '{row.get('Company')}' into '{table_name}': {e}"
@@ -114,7 +112,7 @@ def insert_into_table(table_name: str, data: List[Dict[str, Any]]) -> None:
 
 def fetch_existing_rows(table_name: str, primary_key: str) -> Dict[str, Dict[str, Any]]:
     try:
-        cursor = con.execute(f"SELECT * FROM {table_name}")
+        cursor = get_con().execute(f"SELECT * FROM {table_name}")
         result = cursor.fetchall()
         if cursor.description is None:
             logger.warning(f"[FETCH] No columns found in table '{table_name}'")
@@ -190,7 +188,7 @@ def sync_table(table_name: str):
 
         for key in to_delete:
             try:
-                con.execute(
+                get_con().execute(
                     f"DELETE FROM {table_name} WHERE {db_primary_key} = ?", [key]
                 )
                 logger.info(f"[DELETE] Removed '{key}' from '{table_name}'")
