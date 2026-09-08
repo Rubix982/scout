@@ -60,15 +60,25 @@ def test_normalize_reconciles_sheet_strings_with_duckdb_natives():
 # --- mapping ------------------------------------------------------------------
 
 
-def test_to_db_row_uses_the_explicit_mapping():
-    # No `Type` key in the row, so the entity_type validator yields "unknown"
-    # rather than defaulting to "employer" (E-010).
-    assert to_db_row(COMPANIES, row("wolt", "note", "http://x")) == {
-        "company_name": "wolt",
-        "comments": "note",
-        "link": "http://x",
-        "entity_type": "unknown",
-    }
+def test_to_db_row_maps_every_declared_header_to_its_column():
+    """Derived from the spec, not hardcoded.
+
+    This test previously asserted the exact literal dict, which coupled it to
+    the mapping's size -- it broke three times as E-002, E-010 and E-011 each
+    added a column, every time for a reason that had nothing to do with what it
+    was checking. Now it asserts the property: every declared header lands in
+    its declared column.
+    """
+    sheet_row = {header: f"value-of-{header}" for header in COMPANIES.columns}
+    sheet_row["Type"] = "employer"  # must satisfy the entity_type validator
+
+    record = to_db_row(COMPANIES, sheet_row)
+
+    assert set(record) == set(COMPANIES.db_columns)
+    for header, db_col in COMPANIES.columns.items():
+        if db_col in COMPANIES.validators:
+            continue  # validated columns are transformed; covered separately
+        assert record[db_col] == f"value-of-{header}"
 
 
 def test_to_db_row_applies_validators():
@@ -77,17 +87,23 @@ def test_to_db_row_applies_validators():
     assert to_db_row(COMPANIES, r)["entity_type"] == "employer"
 
 
-def test_to_db_row_ignores_unmapped_sheet_columns():
-    """A phantom or not-yet-mapped column must not reach the insert."""
+def test_to_db_row_defaults_a_missing_column_rather_than_raising():
+    """A sheet lacking a mapped column must still sync -- the value is empty,
+    and the entity_type validator turns that into `unknown`, not `employer`."""
+    record = to_db_row(COMPANIES, {"Company Name": "wolt"})
+    assert record["company_name"] == "wolt"
+    assert record["comments"] == ""
+    assert record["entity_type"] == "unknown"
+
+
+def test_to_db_row_excludes_columns_the_spec_does_not_declare():
+    """Phantom '' keys and not-yet-mapped columns must not reach the insert."""
     r = row("wolt")
     r[""] = "phantom"
-    r["Board URL"] = "http://boards"  # mapped by E-011, not yet
-    assert set(to_db_row(COMPANIES, r)) == {
-        "company_name",
-        "comments",
-        "link",
-        "entity_type",
-    }
+    r["Some Future Column"] = "ignored"
+
+    assert set(to_db_row(COMPANIES, r)) == set(COMPANIES.db_columns)
+    assert "" not in to_db_row(COMPANIES, r)
 
 
 def test_compare_columns_excludes_the_primary_key():

@@ -5,6 +5,7 @@ from src.clients import SheetAccessError
 from src.db import companies as company_queries
 from src.db.init import db_path, init_tables, schema_version
 from src.db.insert import SyncError, sync_companies
+from src.sources.ats.resolve import Status, resolve_all_employers
 
 
 def main() -> int:
@@ -42,6 +43,20 @@ def main() -> int:
             else ""
         )
     )
+
+    resolutions = resolve_all_employers()
+    resolved = [r for r in resolutions if r.status is Status.RESOLVED]
+    unresolved = [r for r in resolutions if r.status is not Status.RESOLVED]
+
+    print(f"\nATS boards: {len(resolved)}/{len(resolutions)} employers resolved")
+    for r in sorted(resolved, key=lambda r: -r.role_count):
+        print(f"  {r.company_name:24} {r.platform.value:14} {r.token:20} {r.role_count:4d} roles")
+    if resolved:
+        print(f"  {'':24} {'':14} {'total':20} {sum(r.role_count for r in resolved):4d} roles")
+    if unresolved:
+        print(f"\n  unresolved ({len(unresolved)}) -- recorded with a reason, not omitted:")
+        for r in sorted(unresolved, key=lambda r: r.company_name):
+            print(f"    {r.company_name:24} {r.explanation}")
     return 0
 
 

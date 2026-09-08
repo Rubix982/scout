@@ -166,7 +166,7 @@ Execution order, not ID order.
 | 4 | E-009 | Engineer   | Storage schema coherence + migrations        | closed | 1 |
 | 5 | E-002 | Engineer   | Reconcile Sheets ingest with the real sheet  | closed | 1 |
 | 6 | E-010 | Engineer   | Entity taxonomy: employers vs sources        | closed | 2 |
-| 7 | E-011 | Engineer   | Board URL as primary resolution path         | open   | 2 |
+| 7 | E-011 | Engineer   | Board URL as primary resolution path         | closed | 2 |
 | 8 | E-003 | Engineer   | ATS adapters: Greenhouse/EU, Lever, Ashby    | open   | 2 |
 | 9 | E-005 | Engineer   | Role snapshots + run-over-run diffing        | open   | 2 |
 | 10| E-006 | Engineer   | `scout report` CLI                           | open   | 2 |
@@ -178,7 +178,7 @@ Execution order, not ID order.
 | ID    | Blocked By                                        |
 | ----- | ------------------------------------------------- |
 | E-002 | — (unblocked; Sheets access now verified working) |
-| E-011 | — (unblocked; 8 of 13 employers lack a Board URL) |
+| E-003 | — (unblocked; needs Greenhouse, Ashby, Lever only) |
 | E-011 | E-010                                             |
 | E-003 | E-011                                             |
 | E-004 | E-011 (deferred to Phase 3 — assist only)         |
@@ -201,12 +201,17 @@ Execution order, not ID order.
 - O-004 · Sheet is input-only; Scout stays read-only, scopes narrowed to one
 - E-002 · Single-sheet ingest live — 36 companies synced, second run reports 0 changes
 - E-010 · Entity taxonomy live — 13 employers, 13 sources, 10 unclassified
+- E-011 · Board resolution live — 5/13 employers resolved, 477 roles visible; 8 unresolved with reasons
 
 ## Next Orchestrator Action
 
 Phase 1 is complete and the pipeline runs end-to-end against the live sheet.
 
-Both columns are in the sheet and E-010 is closed. E-011 is unblocked and can
-parse the 5 board URLs present, but 8 of the 13 employers still have none — that
-is the gating input for roles actually landing in the database. See
-`agents/shared/employers_needing_board_urls.md`.
+E-003 is unblocked, and its scope is now settled by data rather than guesswork:
+the five resolved boards need exactly **Greenhouse, Ashby and Lever**. Greenhouse
+EU is not required for employers — its only appearance (`cherryventures`) sits on
+a row typed `board`.
+
+Coverage is still 5/13 employers. Adding board URLs for the remaining 8 (see
+`agents/shared/employers_needing_board_urls.md`) is the highest-leverage input
+Saif can supply; `ada engage` is confirmed on Greenhouse and most valuable.

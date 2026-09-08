@@ -653,7 +653,7 @@ exactly `('companies', 'entity_type')`.
 
 ### E-011 · Board URL as the primary resolution path
 
-**Status:** open
+**Status:** closed
 **Type:** implement
 **Priority:** high
 **Created:** 2026-09-08
@@ -691,6 +691,63 @@ Work:
 - `ada engage` resolves once its board URL is supplied (R-002 confirmed
   Greenhouse but the token is neither `ada` nor `adaengage`).
 
+**Result — live against the real sheet:**
+
+```
+ATS boards: 5/13 employers resolved
+  wolt          greenhouse  wolt          242 roles
+  affirm        greenhouse  affirm        205 roles
+  fingerprint   greenhouse  fingerprint    23 roles
+  Checkly       ashby       checkly         4 roles
+  Swissborg     lever       swissborg       3 roles
+                            total         477 roles
+
+  unresolved (8) -- recorded with a reason, not omitted
+```
+
+All 13 employers have a `company_ats` row. Sync converges to 0 changes on the
+second run.
+
+**Observation worth keeping:** wolt returned **242** roles, where R-002 measured
+240 about an hour earlier. The board drifted mid-session — first-hand evidence
+for the premise that a hand-maintained sheet decays and that `updated_at`-based
+diffing (E-005) is the point.
+
+- `src/sources/ats/platforms.py` — endpoints, URL patterns and role counting,
+  all verified in R-001/R-002. Greenhouse US and EU are modelled as **distinct
+  platforms** because they are separate tenancies; a token valid on one 404s on
+  the other.
+- **Patterns recognise more platforms than adapters can fetch, deliberately.**
+  `SUPPORTED_PLATFORMS` is a strict subset of `Platform`, which is what lets an
+  employer be reported `platform_unsupported` ("we know what they use, we cannot
+  read it yet") instead of the far less useful `token_not_found`.
+- Validation is **content-based**: zero roles is a failure to resolve, not a
+  successful empty board. A 200 alone proves nothing — SmartRecruiters answers
+  200 with `totalFound: 0` for companies that do not exist.
+- Six distinct `Reason` values, each with an explanation the user actually
+  reads; a test asserts the two sets stay in step.
+- `resolve_all_employers()` skips sources entirely — a test seeds a `board`-typed
+  row with a valid Greenhouse URL and asserts it is never resolved, since a job
+  board's postings are not its own roles.
+- A board going dead flips `resolved` back to `unresolved`, so a stale row cannot
+  persist (R-002 found strapi's Lever board dead within ~6 months).
+- The fetcher is injected, so all 15 resolver tests run without network.
+
+**Demand-driven platform scope now settled by data:** the resolved boards need
+exactly Greenhouse, Ashby and Lever. Greenhouse EU is *not* needed for employers
+— its only appearance (`cherryventures`) is on a row typed `board`. E-003 should
+build those three and nothing more.
+
+**Test-design fix:** the two `to_db_row` tests asserted exact literal dicts and
+broke three times — once each for E-002, E-010 and E-011 — every time for a
+reason unrelated to what they check. Rewritten to derive from
+`COMPANIES.columns`, so adding a column no longer breaks them.
+
+**Suite:** 125 passed (was 74).
+
 **Blockers:** E-010
-**Artifacts:** `src/sources/ats/resolve.py`, `src/db/migrations.py`, `tests/`
-**Closed:** —
+**Artifacts:** `src/sources/ats/platforms.py`, `src/sources/ats/resolve.py`,
+`src/sources/ats/__init__.py`, `src/db/migrations.py`, `src/db/insert.py`,
+`src/db/companies.py`, `src/main.py`, `tests/test_ats_platforms.py`,
+`tests/test_ats_resolve.py`, `tests/test_sync.py`
+**Closed:** 2026-09-08

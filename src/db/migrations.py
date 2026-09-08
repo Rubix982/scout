@@ -178,13 +178,39 @@ _ENTITY_TYPE = (
     "ALTER TABLE companies ADD COLUMN IF NOT EXISTS entity_type TEXT DEFAULT 'unknown';",
 )
 
+# --- 004: board_url + company_ats (E-011) -------------------------------------
+# User-supplied board URLs are the PRIMARY resolution path, not a fallback:
+# R-002 measured automatic resolution at 19% with a ~31% ceiling, and 13 of 18
+# employers have no ATS signature at all.
+#
+# `status`/`reason` exist so an unresolved employer is recorded with a cause
+# rather than being silently absent -- overstating coverage is the failure mode
+# this whole re-pass exists to prevent.
+_BOARD_URL_AND_ATS = (
+    "ALTER TABLE companies ADD COLUMN IF NOT EXISTS board_url TEXT DEFAULT '';",
+    """
+    CREATE TABLE IF NOT EXISTS company_ats (
+      company_name TEXT PRIMARY KEY,
+      platform TEXT,
+      token TEXT,
+      resolution_method TEXT,
+      status TEXT,
+      reason TEXT,
+      last_role_count INTEGER,
+      resolved_at TIMESTAMP,
+      last_validated_at TIMESTAMP
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_company_ats_status ON company_ats(status);",
+)
+
 MIGRATIONS: Tuple[Migration, ...] = (
     Migration(version=1, name="baseline", statements=_BASELINE),
     Migration(version=2, name="companies", statements=_COMPANIES),
     Migration(version=3, name="entity_type", statements=_ENTITY_TYPE),
+    Migration(version=4, name="board_url_and_ats", statements=_BOARD_URL_AND_ATS),
     # Remaining tracker tables are added by their owning tickets:
-    #   004 board_url + company_ats (E-011)
-    #   005 roles + runs            (E-005)
+    #   005 roles + runs (E-005)
 )
 
 

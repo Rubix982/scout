@@ -22,12 +22,13 @@ class Company:
     entity_type: str
     comments: str
     link: str
+    board_url: str
 
 
 def _rows(where: str = "", params: tuple = ()) -> List[Company]:
     sql = (
-        "SELECT company_name, entity_type, comments, link FROM companies "
-        f"{where} ORDER BY company_name"
+        "SELECT company_name, entity_type, comments, link, board_url "
+        f"FROM companies {where} ORDER BY company_name"
     )
     return [Company(*r) for r in get_con().execute(sql, list(params)).fetchall()]
 

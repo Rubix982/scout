@@ -61,6 +61,7 @@ COMPANIES = SheetTable(
         "Comments": "comments",
         "Link": "link",
         "Type": "entity_type",
+        "Board URL": "board_url",
     },
     validators={"entity_type": entities.parse},
 )
