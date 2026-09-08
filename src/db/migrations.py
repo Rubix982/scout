@@ -148,12 +148,32 @@ _BASELINE = (
     """,
 )
 
+# --- 002: companies (E-002) ---------------------------------------------------
+# The real sheet: one worksheet, columns `Company Name | Comments | Link`.
+# The legacy `company_research` / `processed_companies` tables in migration 001
+# modelled two worksheets that were never built; they are left in place
+# (decision O-001) but nothing syncs into them any more.
+#
+# `entity_type` and `board_url` are deliberately NOT here -- they arrive in
+# migration 003 (E-010/E-011) once the sheet actually has those columns.
+_COMPANIES = (
+    """
+    CREATE TABLE IF NOT EXISTS companies (
+      company_name TEXT PRIMARY KEY,
+      comments TEXT,
+      link TEXT,
+      synced_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """,
+)
+
 MIGRATIONS: Tuple[Migration, ...] = (
     Migration(version=1, name="baseline", statements=_BASELINE),
-    # Tracker tables are added by their owning tickets:
-    #   002 companies    (E-002)
-    #   003 company_ats  (E-004)
-    #   004 roles + runs (E-005)
+    Migration(version=2, name="companies", statements=_COMPANIES),
+    # Remaining tracker tables are added by their owning tickets:
+    #   003 entity_type + board_url (E-010, E-011)
+    #   004 company_ats             (E-011)
+    #   005 roles + runs            (E-005)
 )
 
 

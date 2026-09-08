@@ -1,14 +1,10 @@
 # src/clients/__init__.py
-from .gsuite import (
-    get_company_research,
-    get_gsheet_client,
-    get_processed_companies,
-    get_sheet_data,
-)
+from .errors import SheetAccessError
+from .gsuite import get_companies, get_gsheet_client, get_worksheet_records
 
 __all__ = [
-    "get_company_research",
+    "SheetAccessError",
+    "get_companies",
     "get_gsheet_client",
-    "get_processed_companies",
-    "get_sheet_data",
+    "get_worksheet_records",
 ]

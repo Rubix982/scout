@@ -69,7 +69,7 @@ each invariant, checking import purity in a fresh subprocess.
 
 ### E-002 · Reconcile Sheets ingest with the actual sheet
 
-**Status:** open
+**Status:** closed
 **Type:** implement
 **Priority:** high
 **Created:** 2026-09-08
@@ -123,9 +123,53 @@ Per the R-002 re-pass, the ingest also reads two new user-maintained columns,
 **Acceptance:** a dry-run sync against the real sheet reports 0 changes on a
 second consecutive run.
 
+**Result — acceptance met against the live sheet:**
+
+```
+run 1:  +36 new, ~0 changed, -0 removed, =0  unchanged
+run 2:  +0  new, ~0 changed, -0 removed, =36 unchanged
+```
+
+Database holds 36 companies, 25 with links, 2 with comments — matching the sheet
+exactly. Schema at version 2.
+
+- Migration 002 creates `companies`. `entity_type`/`board_url` deliberately
+  deferred to migration 003, since the sheet does not have those columns yet.
+- `src/db/insert.py` rewritten declaratively: a `SheetTable` carries the
+  header→column mapping, replacing five parallel `if table_name == ...` dispatch
+  functions. `test_declarative_spec_works_for_a_different_table` proves one code
+  path serves any table.
+- `prettify_column_names()` deleted. It rebuilt sheet headers by title-casing db
+  columns, coupling the schema to the sheet's exact capitalisation.
+- Type-coercion bug fixed via `normalize()`. Sheet cells arrive as `"TRUE"`/`""`,
+  DuckDB returns `True`/`None`; compared raw, every row looked changed on every
+  run and the delta never converged.
+- Phantom `''` key stripped at the client boundary.
+- `src/clients/errors.py` unmasks gspread's discarded `APIError` via `__cause__`
+  and distinguishes `SERVICE_DISABLED` from genuinely-not-shared from bad URL —
+  the exact confusion that misdirected setup diagnosis.
+- The two `xfail(strict=True)` markers were removed, as strict mode intended.
+
+**Two defects found in my own test code while closing this:**
+- `test_fresh_and_preexisting_databases_converge` asserted `== [1]`, pinning it
+  to the migration count; it broke the instant migration 002 existed. Now
+  asserts against `MIGRATIONS`.
+- `test_config.py`'s `env_sandbox` cleanup called `config.load(force=True)`
+  *before* monkeypatch restored the patched `ENV_FILES`, so it re-read the temp
+  files with `override=True` and pushed `COMPANIES_SHEET_NAME="from_secrets"`
+  back into `os.environ` — where it leaked into the live sheet test, which then
+  asked the API for a worksheet by that name. Passed in isolation, failed in the
+  suite. Fixed by clearing `_loaded` instead, plus a guard test verified to fail
+  when the leak is reintroduced.
+
+**Suite:** 47 passed (was 18).
+
 **Blockers:** E-008, E-009
-**Artifacts:** `src/db/insert.py`, `src/db/init.py`, `src/common/utils.py`, `src/clients/gsuite.py`
-**Closed:** —
+**Artifacts:** `src/db/insert.py`, `src/db/migrations.py`, `src/clients/gsuite.py`,
+`src/clients/errors.py`, `src/clients/__init__.py`, `src/main.py`,
+`src/constants/tables.py`, `src/common/utils.py`, `tests/test_sync.py`,
+`tests/test_gsuite.py`, `tests/test_config.py`, `tests/test_duckdb.py`
+**Closed:** 2026-09-08
 
 ---
 

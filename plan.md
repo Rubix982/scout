@@ -141,7 +141,7 @@ entity kinds; make user-supplied board URLs the primary resolution path. See
 
 ## Current Phase
 
-Phase 1 — **Infrastructure coherence** (4/5 closed; E-002 remaining). No connector work begins until ingestion,
+Phase 1 — **Infrastructure coherence** — **COMPLETE** (5/5 closed). No connector work begins until ingestion,
 config, and storage cooperate. Rationale: the repo currently cannot even be
 installed (E-007), nothing imports (E-001), one env file is loaded nowhere
 (E-008), and schema changes silently do not apply (E-009). Writing ATS adapters
@@ -164,7 +164,7 @@ Execution order, not ID order.
 | 2 | E-001 | Engineer   | Repair bootstrap: imports, DB connection     | closed | 1 |
 | 3 | E-008 | Engineer   | Single config layer                          | closed | 1 |
 | 4 | E-009 | Engineer   | Storage schema coherence + migrations        | closed | 1 |
-| 5 | E-002 | Engineer   | Reconcile Sheets ingest with the real sheet  | open   | 1 |
+| 5 | E-002 | Engineer   | Reconcile Sheets ingest with the real sheet  | closed | 1 |
 | 6 | E-010 | Engineer   | Entity taxonomy: employers vs sources        | open   | 2 |
 | 7 | E-011 | Engineer   | Board URL as primary resolution path         | open   | 2 |
 | 8 | E-003 | Engineer   | ATS adapters: Greenhouse/EU, Lever, Ashby    | open   | 2 |
@@ -178,7 +178,7 @@ Execution order, not ID order.
 | ID    | Blocked By                                        |
 | ----- | ------------------------------------------------- |
 | E-002 | — (unblocked; Sheets access now verified working) |
-| E-010 | E-002                                             |
+| E-010 | — (unblocked; needs `Type` column in the sheet)   |
 | E-011 | E-010                                             |
 | E-003 | E-011                                             |
 | E-004 | E-011 (deferred to Phase 3 — assist only)         |
@@ -197,11 +197,13 @@ Execution order, not ID order.
 - E-008 · Config layer — `src/config.py`; fixed `common.env` being validated but never loaded
 - E-009 · Migrations — `schema_version` + transactional ordered migrations; tests isolated from the real DB
 - R-002 · Full-sheet resolution measured at 19% — falsification criterion failed; Phase 2 halted pending re-pass
+- O-003 · Design re-pass — employers vs sources; opened E-010, E-011, T-006
+- O-004 · Sheet is input-only; Scout stays read-only, scopes narrowed to one
+- E-002 · Single-sheet ingest live — 36 companies synced, second run reports 0 changes
 
 ## Next Orchestrator Action
 
-Sheets access is now verified live, so E-002 can be both built and closed for
-real. It is the last Phase 1 ticket and the gate for the re-scoped Phase 2.
+Phase 1 is complete and the pipeline runs end-to-end against the live sheet.
 
 Before E-010 can be built, Saif needs to add two columns to the sheet — `Type`
 and `Board URL` — since both are user-maintained by design (auto-classification

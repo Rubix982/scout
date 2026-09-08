@@ -1,20 +1,29 @@
 # src/main.py
 """Entry point. Run with `python -m src.main` (or `make run`)."""
 
-from src.constants.tables import TABLE_COMPANY_RESEARCH, TABLE_PROCESSED_COMPANIES
-from src.db.init import init_tables
-from src.db.insert import sync_table
+from src.clients import SheetAccessError
+from src.db.init import db_path, init_tables, schema_version
+from src.db.insert import sync_companies
 
 
-def sync_google_sheets_to_duckdb() -> None:
-    for table_name in (TABLE_PROCESSED_COMPANIES, TABLE_COMPANY_RESEARCH):
-        sync_table(table_name=table_name)
+def main() -> int:
+    applied = init_tables()
+    if applied:
+        print(f"schema: applied {len(applied)} migration(s)")
+    print(f"schema version {schema_version()} at {db_path()}")
 
+    try:
+        plan = sync_companies()
+    except SheetAccessError as exc:
+        print(f"\nCould not read the sheet:\n  {exc}")
+        return 1
 
-def main() -> None:
-    init_tables()
-    sync_google_sheets_to_duckdb()
+    print(
+        f"companies: +{len(plan.to_insert)} new, ~{len(plan.to_update)} changed, "
+        f"-{len(plan.to_delete)} removed, ={plan.unchanged} unchanged"
+    )
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

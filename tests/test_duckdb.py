@@ -71,8 +71,11 @@ def test_fresh_and_preexisting_databases_converge(tmp_path):
     assert "schema_version" not in _tables(legacy)
     assert current_version(legacy) == 0
 
+    # Assert against MIGRATIONS, not a literal. Hardcoding `== [1]` broke the
+    # moment migration 002 was added -- the test was pinned to the migration
+    # count rather than to the property it means to check.
     applied = apply_pending(legacy)
-    assert [m.version for m in applied] == [1]
+    assert [m.version for m in applied] == [m.version for m in MIGRATIONS]
 
     assert _tables(legacy) == _tables(fresh)
     assert current_version(legacy) == current_version(fresh)

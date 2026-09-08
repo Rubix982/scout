@@ -39,7 +39,15 @@ def env_sandbox(tmp_path, monkeypatch):
     finally:
         os.environ.clear()
         os.environ.update(snapshot)
-        config.load(force=True)
+        # Deliberately NOT config.load(force=True) here. monkeypatch undoes the
+        # patched ENV_FILES *after* this finalizer runs, so a forced reload at
+        # this point re-reads the TEMP files with override=True and pushes their
+        # values straight back into os.environ -- where they survive into later
+        # tests. That leaked COMPANIES_SHEET_NAME="from_secrets" into the live
+        # sheet test, which then asked the API for a worksheet by that name.
+        # Clearing the flag instead defers loading until the next real access,
+        # by which time monkeypatch has restored the true paths.
+        config._loaded = False
 
 
 def test_value_set_only_in_common_env_is_applied(env_sandbox):
@@ -112,3 +120,16 @@ def test_missing_env_files_are_not_an_error(env_sandbox):
     secrets.unlink()
     config.load(force=True)
     assert config.get(config.LOG_LEVEL) == "DEBUG"
+
+
+def test_sandbox_does_not_leak_into_real_config():
+    """Guard against the fixture-cleanup leak described in `env_sandbox`.
+
+    Deliberately does NOT use `env_sandbox`, and is placed last in the file so
+    it runs after every sandboxed test. If a sandbox ever pushes its temp values
+    back into `os.environ`, this fails here rather than surfacing much later as
+    a live API call for a worksheet named "from_secrets".
+    """
+    config.load(force=True)
+    assert config.get(config.COMPANIES_SHEET_NAME) == "Sheet1"
+    assert config.get(config.COMPANY_RESEARCH_SHEET_NAME) == "Company Research"
