@@ -148,8 +148,8 @@ installed (E-007), nothing imports (E-001), one env file is loaded nowhere
 on top of that would mean debugging fetch logic and broken plumbing at the same
 time, with no way to tell which layer failed.
 
-Phase 2 — **Entity model + ingestion**, re-scoped after the R-002 re-pass:
-E-002 → E-010 → E-011 → E-003 → E-005 → E-006.
+Phase 2 — **Entity model + ingestion** — **COMPLETE**.
+E-002 → E-010 → E-011 → E-003 → E-005 → E-006, all closed.
 
 Phase 3 — Automatic resolution as a convenience (E-004), and source harvesting
 (T-006). Both explicitly out of v1.
@@ -169,7 +169,7 @@ Execution order, not ID order.
 | 7 | E-011 | Engineer   | Board URL as primary resolution path         | closed | 2 |
 | 8 | E-003 | Engineer   | ATS adapters: Greenhouse/EU, Lever, Ashby    | closed | 2 |
 | 9 | E-005 | Engineer   | Role snapshots + run-over-run diffing        | closed | 2 |
-| 10| E-006 | Engineer   | `scout report` CLI                           | open   | 2 |
+| 10| E-006 | Engineer   | `scout report` CLI                           | closed | 2 |
 | — | E-004 | Engineer   | Automatic resolution (assist, low priority)  | open   | 3 |
 | — | R-002 | Researcher | Measure resolution rate over the full sheet  | closed | 2 |
 
@@ -178,7 +178,7 @@ Execution order, not ID order.
 | ID    | Blocked By                                        |
 | ----- | ------------------------------------------------- |
 | E-002 | — (unblocked; Sheets access now verified working) |
-| E-006 | — (unblocked; last v1 ticket)                      |
+| —     | v1 complete; nothing blocked                       |
 | E-011 | E-010                                             |
 | E-003 | E-011                                             |
 | E-004 | E-011 (deferred to Phase 3 — assist only)         |
@@ -204,16 +204,24 @@ Execution order, not ID order.
 - E-011 · Board resolution live — 5/13 employers resolved, 477 roles visible; 8 unresolved with reasons
 - E-003 · Adapters live — 477/477 roles normalised across Greenhouse, Lever, Ashby
 - E-005 · Snapshots + diffing live — 477 roles tracked, closed/reopened verified on real data
+- E-006 · Report live — **v1 deliverable met**; caught 5 real wolt closures unprompted
 
 ## Next Orchestrator Action
 
 Phase 1 is complete and the pipeline runs end-to-end against the live sheet.
 
-E-003 is unblocked, and its scope is now settled by data rather than guesswork:
-the five resolved boards need exactly **Greenhouse, Ashby and Lever**. Greenhouse
-EU is not required for employers — its only appearance (`cherryventures`) sits on
-a row typed `board`.
+**v1 is complete.** `make run` syncs the sheet, resolves boards, snapshots roles
+and prints the report; `make report` re-prints without re-fetching.
 
-Coverage is still 5/13 employers. Adding board URLs for the remaining 8 (see
-`agents/shared/employers_needing_board_urls.md`) is the highest-leverage input
-Saif can supply; `ada engage` is confirmed on Greenhouse and most valuable.
+Two things now compete for next:
+
+1. **Coverage.** 5 of 13 employers have a board URL. Adding the rest (see
+   `agents/shared/employers_needing_board_urls.md`) is Saif's input, not
+   engineering work — `ada engage` is confirmed on Greenhouse and most valuable.
+2. **The README.** Still 32KB describing the cold-outreach engine, and now the
+   single most misleading artifact in the repo: a second engineer reading it
+   would build the wrong system. `agents/documentor/tickets.md` flags this; the
+   ingestion shape is settled, so a `D-` ticket is now appropriate.
+
+Deferred by design: E-004 (automatic resolution, Phase 3), T-002 (refresh
+cadence — now answerable as history accumulates), T-003, T-004, T-006.

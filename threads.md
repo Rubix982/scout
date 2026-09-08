@@ -52,23 +52,30 @@ imagined data.
 
 ### T-005 · Do ATS APIs expose full JD text, and is it worth storing?
 
-**Status:** open
+**Status:** answered
 **Parent:** T-004
 **Opened:** 2026-09-08
 **Question:** Greenhouse `?content=true` returns JD HTML. Storing it enables
 T-004's keyword/embedding approaches and "what profiles are they hiring for" at
 depth, but multiplies storage and needs HTML cleaning. E-003 retains `raw` JSON,
 which partially hedges this.
-**Answer:** —
+**Answer:** Yes, and it arrives whether or not we want it. E-003 established
+that Greenhouse only returns `departments[]` under `?content=true`, which also
+carries the JD HTML — so the department data the report needs comes bundled with
+the text. `roles.raw` retains the whole payload, so JD text is already stored
+for every role at no extra request. Cost measured: ~5.4MB per run across three
+boards. The remaining question is only whether to *parse* it (keyword/embedding
+work), which belongs with T-004.
 
 ---
 
 Threads
+- answered→ T-005 · JD text — available, and already stored in roles.raw
 - parked  → T-001 · postings as proxy for direction (conceded in design, not investigated)
-- opened  → T-002 · refresh cadence vs. diff noise
+- opened  → T-002 · refresh cadence vs. diff noise  ← now answerable, history is accumulating
             T-003 · defining competitor/peer sets
             T-004 · mechanics of "alignment"
-            T-005 · JD text — available? worth storing?
+            T-006 · harvesting sources for companies
 
 ### T-006 · Should sources be harvested for companies automatically?
 

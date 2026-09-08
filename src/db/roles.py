@@ -265,6 +265,51 @@ def open_role_count(company_name: Optional[str] = None) -> int:
     return int(get_con().execute(sql, params).fetchone()[0])
 
 
+@dataclass(frozen=True)
+class OpenRole:
+    company_name: str
+    platform: str
+    external_id: str
+    title: str
+    location: str
+    department: str
+    url: str
+    first_published: Optional[str]
+    first_seen_run: Optional[int]
+
+
+def open_roles(company_name: Optional[str] = None) -> List[OpenRole]:
+    sql = (
+        "SELECT company_name, platform, external_id, title, location, department, "
+        "url, first_published, first_seen_run FROM roles WHERE closed_at IS NULL"
+    )
+    params: List[object] = []
+    if company_name:
+        sql += " AND company_name = ?"
+        params.append(company_name)
+    sql += " ORDER BY company_name, title"
+    return [OpenRole(*row) for row in get_con().execute(sql, params).fetchall()]
+
+
+def latest_completed_run() -> Optional[int]:
+    row = get_con().execute(
+        "SELECT max(run_id) FROM runs WHERE finished_at IS NOT NULL"
+    ).fetchone()
+    return int(row[0]) if row and row[0] is not None else None
+
+
+def run_summary(run_id: int) -> Optional[dict]:
+    row = get_con().execute(
+        "SELECT run_id, started_at, finished_at, companies_attempted, "
+        "companies_fetched, companies_failed, roles_seen FROM runs WHERE run_id = ?",
+        [run_id],
+    ).fetchone()
+    if row is None:
+        return None
+    keys = ("run_id", "started_at", "finished_at", "attempted", "fetched", "failed", "roles_seen")
+    return dict(zip(keys, row))
+
+
 def changes_for_run(run_id: int, change_type: Optional[ChangeType] = None) -> List[dict]:
     sql = (
         "SELECT company_name, change_type, title, field, old_value, new_value, "

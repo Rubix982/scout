@@ -3,6 +3,7 @@
 ## 2026-09-08 · Session 1 (revival)
 
 - [R-001] ATS endpoint feasibility measured — findings in `agents/shared/findings.md`, probe scripts in `agents/researcher/findings/`
+- [E-006] Report live — **v1 deliverable met**. Coverage, changes-since-last-run, department mix as shares, and unresolved employers with reasons. Detected 5 real wolt closures on its first unattended run. Evergreen talent-pool postings flagged and set aside. **Phase 2 complete.**
 - [E-005] Snapshots + run-over-run diffing live — 477 roles tracked; closed/reopened verified against real boards. A failed fetch closes nothing; identity keyed on ATS id (wolt lists "Grocery Associate" 14 times)
 - [E-003] ATS adapters live — 477/477 roles normalised across Greenhouse, Lever and Ashby. `content=true` proved necessary for department coverage (44% → 100%); only Greenhouse reports `updated_at`, so E-005 must diff on content
 - [E-011] Board resolution live — 5/13 employers resolved from user-supplied URLs, 477 roles visible; all 8 unresolved recorded with reasons. Platform scope for E-003 now settled by data: Greenhouse, Ashby, Lever

@@ -404,7 +404,7 @@ modules.
 
 ### E-006 · `scout report` CLI
 
-**Status:** open
+**Status:** closed
 **Type:** implement
 **Priority:** medium
 **Created:** 2026-09-08
@@ -428,9 +428,53 @@ history exist.
 **Acceptance:** `scout report` runs against a populated DB and prints all four
 sections, with unresolved companies visible.
 
+**Result — the v1 deliverable, live.** `make report` prints four sections:
+coverage, changes since the previous run, what each company is hiring for as
+department **shares**, and the employers Scout cannot see with reasons.
+
+**It caught real signal on its first unattended run.** Run 4 detected 5 wolt
+roles closed since run 3 — genuine board changes, not simulated:
+
+```
+Closed (5)
+  wolt
+    - Operations Associate, Courier Onboarding
+    - Partnership Manager
+    - Senior Account Manager, Restaurant
+    - Staff Software Engineer, iOS
+    - Support Associate (English speaking)
+```
+
+The mix section answers the original question directly. affirm is ~42%
+engineering across three eng departments (Consumer 14.6%, Financial Platforms
+14.6%, Infrastructure 13.2%); wolt is operations-led (Order Fulfillment 21.5%,
+merchant acquisition 11.2%) with engineering barely present. Those are different
+companies to approach differently, which is the whole point.
+
+**Evergreen postings.** Checkly's board leads with "Don't see the role you're
+looking for? Join our Talent Community!" — a real board entry that is not a
+vacancy. `is_evergreen()` flags these (1 of 477) and the report sets them aside
+*and says so*, since the heuristic runs on free text. False-positive coverage
+matters as much as true positives: "Talent Acquisition Partner", "Head of
+Talent", "Community Manager" and "Application Security Engineer" are all
+asserted **not** to be flagged.
+
+**What the report deliberately does not say.** A test asserts the output
+contains none of "trend", "growing", "increasing", "investing in" or "shifting
+toward". With one run of history, any such claim would fail plan.md lens 7 —
+the null hypothesis is that a company simply posts a lot of everything. Scoring
+(T-004) is likewise out of v1.
+
+CLI has `sync`, `snapshot`, `report` and `run` subcommands; `src/main.py` now
+delegates so both module paths behave identically. `make sync/snapshot/report`
+added.
+
+**Suite:** 211 passed (was 179).
+
 **Blockers:** E-005
-**Artifacts:** `src/cli.py`
-**Closed:** —
+**Artifacts:** `src/cli.py`, `src/main.py`, `src/common/models.py`,
+`src/db/roles.py`, `Makefile`, `tests/test_cli_report.py`
+**Closed:** 2026-09-08
 
 ---
 

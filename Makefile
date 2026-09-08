@@ -21,7 +21,19 @@ tests:
 
 .PHONY: run
 run:
-	$(PY) -m src.main
+	$(PY) -m src.cli run
+
+.PHONY: sync
+sync:
+	$(PY) -m src.cli sync
+
+.PHONY: snapshot
+snapshot:
+	$(PY) -m src.cli snapshot
+
+.PHONY: report
+report:
+	$(PY) -m src.cli report
 
 # Note: there is deliberately no `activate` target. Each recipe line runs in its
 # own subshell, so `source .venv/bin/activate` in a Makefile cannot affect the
