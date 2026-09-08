@@ -3,6 +3,7 @@
 ## 2026-09-08 · Session 1 (revival)
 
 - [R-001] ATS endpoint feasibility measured — findings in `agents/shared/findings.md`, probe scripts in `agents/researcher/findings/`
+- [E-003] ATS adapters live — 477/477 roles normalised across Greenhouse, Lever and Ashby. `content=true` proved necessary for department coverage (44% → 100%); only Greenhouse reports `updated_at`, so E-005 must diff on content
 - [E-011] Board resolution live — 5/13 employers resolved from user-supplied URLs, 477 roles visible; all 8 unresolved recorded with reasons. Platform scope for E-003 now settled by data: Greenhouse, Ashby, Lever
 - [E-010] Entity taxonomy live — employers separated from sources; 13 employers, 13 sources, 10 unclassified. Migration 003 reshapes a populated table; converge test strengthened to column level
 - [E-002] Single-sheet ingest against the live sheet — 36 companies, second run reports 0 changes; declarative `SheetTable` mapping, type-coercion fix, phantom-column stripping, gspread error unmasking. **Phase 1 complete.**

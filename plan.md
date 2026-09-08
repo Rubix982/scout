@@ -167,7 +167,7 @@ Execution order, not ID order.
 | 5 | E-002 | Engineer   | Reconcile Sheets ingest with the real sheet  | closed | 1 |
 | 6 | E-010 | Engineer   | Entity taxonomy: employers vs sources        | closed | 2 |
 | 7 | E-011 | Engineer   | Board URL as primary resolution path         | closed | 2 |
-| 8 | E-003 | Engineer   | ATS adapters: Greenhouse/EU, Lever, Ashby    | open   | 2 |
+| 8 | E-003 | Engineer   | ATS adapters: Greenhouse/EU, Lever, Ashby    | closed | 2 |
 | 9 | E-005 | Engineer   | Role snapshots + run-over-run diffing        | open   | 2 |
 | 10| E-006 | Engineer   | `scout report` CLI                           | open   | 2 |
 | — | E-004 | Engineer   | Automatic resolution (assist, low priority)  | open   | 3 |
@@ -178,7 +178,7 @@ Execution order, not ID order.
 | ID    | Blocked By                                        |
 | ----- | ------------------------------------------------- |
 | E-002 | — (unblocked; Sheets access now verified working) |
-| E-003 | — (unblocked; needs Greenhouse, Ashby, Lever only) |
+| E-005 | — (unblocked; must diff on content, not `updated_at`) |
 | E-011 | E-010                                             |
 | E-003 | E-011                                             |
 | E-004 | E-011 (deferred to Phase 3 — assist only)         |
@@ -202,6 +202,7 @@ Execution order, not ID order.
 - E-002 · Single-sheet ingest live — 36 companies synced, second run reports 0 changes
 - E-010 · Entity taxonomy live — 13 employers, 13 sources, 10 unclassified
 - E-011 · Board resolution live — 5/13 employers resolved, 477 roles visible; 8 unresolved with reasons
+- E-003 · Adapters live — 477/477 roles normalised across Greenhouse, Lever, Ashby
 
 ## Next Orchestrator Action
 

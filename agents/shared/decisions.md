@@ -143,3 +143,45 @@ enforcement).
 **Revisit if:** T-006 (harvesting sources to discover companies) is built.
 Appending newly-found employers to the sheet is a genuine write use case, and the
 scope should be widened then — earned by a feature that needs it, not in advance.
+
+---
+
+## [E-003] Decision: Greenhouse requests `content=true`; diffing cannot rely on `updated_at`
+
+_Date: 2026-09-08_
+
+**Decision (a):** the Greenhouse adapter passes `?content=true` by default, and
+department is read from `departments[]` with custom `metadata` as a courtesy
+fallback only.
+
+**Rationale:** an earlier version of this module did the opposite — avoided
+`content=true` to save ~15x payload (155KB → 2.4MB for 205 roles) and read
+department from `metadata` as "External Department". Measured against the five
+live boards, that gave **212/477 roles with a department (44%)**: affirm alone.
+`metadata` entries are *tenant-defined custom fields*, not a schema — affirm
+happens to define "External Department", wolt defines three different
+department-ish keys, fingerprint defines none. `departments[]` is the real field
+and is empty without `content=true`. With it, coverage is **477/477 (100%)**.
+
+Since the v1 deliverable is role mix *by department* (E-006), the cheaper
+request sacrificed the field the report is built on. ~5.4MB per run across three
+boards is a fine price for a tool running locally on a schedule, and it also
+answers thread T-005 for free: JD text arrives in the same response.
+
+**Decision (b):** run-over-run change detection compares normalised fields, not
+timestamps.
+
+**Rationale:** read off live responses, **only Greenhouse reports a modification
+time.** Lever exposes `createdAt` (epoch milliseconds) and Ashby `publishedAt`,
+both creation-only. A design keyed on `updated_at` would silently never detect
+changes on 2 of the 3 platforms. E-005 must therefore diff on content, using the
+stable ATS `id` for identity — never the title, since reposts and title churn
+would manufacture phantom "new role" events.
+
+**Alternatives rejected:** heuristic matching of any `metadata` key containing
+"department" (wolt has three, with different meanings, so the heuristic picks
+arbitrarily); fetching `content=true` only for boards whose department is empty
+(two requests per board to save bandwidth that does not matter locally).
+
+**Revisit if:** payload size starts to matter — e.g. many more boards, or running
+somewhere metered. `include_content=False` remains available per call.

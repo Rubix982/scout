@@ -175,7 +175,7 @@ exactly. Schema at version 2.
 
 ### E-003 · ATS adapters: Greenhouse (+EU), Lever, Ashby
 
-**Status:** open
+**Status:** closed
 **Type:** implement
 **Priority:** high
 **Created:** 2026-09-08
@@ -216,9 +216,44 @@ column actually contains (E-011). R-002 found JazzHR, Rippling and
 SmartRecruiters/Workday among the employers, but adding them blind buys ~4
 companies and leaves the real modelling problem untouched.
 
+**Result:** **477/477 roles normalised** across all five resolved boards —
+greenhouse (wolt 242, affirm 205, fingerprint 23), ashby (checkly 4),
+lever (swissborg 3).
+
+Field shapes were read off live responses rather than documentation, and the
+three platforms disagree more than the original design assumed:
+
+| field | Greenhouse | Lever | Ashby |
+| :-- | :-- | :-- | :-- |
+| id | int | uuid str | uuid str |
+| title | `title` | **`text`** | `title` |
+| location | `location.name` | `categories.location` | `location` |
+| department | `departments[]` | `categories.department` | `department` |
+| created | `first_published` | `createdAt` (**epoch ms**) | `publishedAt` |
+| **updated** | `updated_at` | **absent** | **absent** |
+
+**Two findings that changed the design** (recorded in decisions.md → "[E-003]"):
+
+1. *`content=true` is not optional.* The first implementation skipped it to save
+   15x payload and read department from `metadata` "External Department".
+   Measured: **212/477 roles (44%)** got a department — affirm only. `metadata`
+   keys are tenant-defined, not schema; wolt has three department-ish keys and
+   fingerprint none. With `content=true`: **477/477 (100%)**. The cheaper
+   request sacrificed exactly the field E-006's deliverable is built on.
+2. *Only Greenhouse reports a modification time.* Lever and Ashby are
+   creation-only, so E-005 cannot diff on `updated_at` — it must compare
+   normalised fields, keyed on the stable ATS `id`.
+
+**Scope note:** built Greenhouse, Greenhouse EU, Lever and Ashby. EU shares the
+Greenhouse normaliser but is a distinct platform in `identity`, so the two
+tenancies can never collide.
+
+**Suite:** 155 passed.
+
 **Blockers:** E-011
-**Artifacts:** `src/sources/ats/` (`base.py`, `greenhouse.py`, `lever.py`, `ashby.py`)
-**Closed:** —
+**Artifacts:** `src/sources/ats/roles.py`, `src/sources/ats/__init__.py`,
+`tests/test_ats_roles.py`, `agents/shared/decisions.md`
+**Closed:** 2026-09-08
 
 ---
 
