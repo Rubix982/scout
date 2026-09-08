@@ -1,0 +1,22 @@
+# Direct dependencies only. Lower bounds, not exact pins, so the resolver can
+# pick versions that actually have wheels for the running interpreter.
+# Regenerate the locked set with:  pip install -r requirements.in && pip freeze > requirements.txt
+# See agents/shared/decisions.md → "[E-007] Two-file dependency management".
+
+# storage
+duckdb>=1.5.0
+
+# Google Sheets ingest
+gspread>=6.2.1
+google-auth>=2.40.3
+
+# HTTP client for ATS adapters (E-003) — was previously only an implicit
+# transitive of gspread
+requests>=2.32.3
+
+# config
+python-dotenv>=1.1.0
+
+# tests
+pytest>=8.4.0
+pytest-cov>=6.1.1
