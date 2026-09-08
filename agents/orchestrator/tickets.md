@@ -70,3 +70,42 @@ on both. Execution order is now E-007 → E-001 → E-008 → E-009 → E-002.
 **Artifacts:** `plan.md`, `agents/engineer/tickets.md`
 
 **Closed:** 2026-09-08
+
+---
+
+### O-003 · Design re-pass after R-002 falsification
+
+**Status:** closed
+**Type:** coordinate
+**Priority:** high
+**Created:** 2026-09-08
+**Updated:** 2026-09-08
+
+**Description:**
+R-002 measured ATS token resolution at 7/36 (19%) against a falsification bar of
+50% set in `plan.md` lens 4. Halted Phase 2 rather than proceed, per design rule
+2 (the WHY gate is a stop condition).
+
+Diagnosis had two independent causes, and neither alone rescued the design: a
+mis-specified denominator (~16 of 36 rows are not employers and cannot resolve in
+principle — a lens 3 completeness failure that should have been caught before the
+sweep ran), and a genuine coverage limit (13 of 18 employers run career pages
+with no ATS signature). Corrected ceiling ~31% overall, ~52% of employers, and
+only after adding three platforms.
+
+Resolution: model employers and sources as distinct entity kinds, and demote
+automatic token resolution to an assist behind user-supplied board URLs. ATS
+survives as the *source* — 540 real roles across 7 companies — but not as an
+automatically-resolvable one.
+
+Opened E-010 (entity taxonomy) and E-011 (board URL as primary path). Re-scoped
+E-002 (new sheet columns, phantom-key and gspread-error findings), E-003
+(platform scope now demand-driven), E-004 (demoted to low-priority assist).
+Opened T-006 for source harvesting, explicitly out of v1.
+
+**Artifacts:** `plan.md` → "Design re-pass", `agents/shared/decisions.md` →
+"[O-003] Model employers and sources as distinct entity kinds",
+`agents/shared/entity_classification_proposal.md`, `agents/engineer/tickets.md`,
+`threads.md` → T-006
+
+**Closed:** 2026-09-08

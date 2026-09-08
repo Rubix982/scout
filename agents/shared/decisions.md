@@ -74,3 +74,72 @@ property with stock pip); unpinned `requirements.txt` only (loses reproducibilit
 
 **Revisit if:** the project gains contributors or CI, where a real lockfile with
 hashes starts earning its keep.
+
+---
+
+## [O-003] Decision: Model employers and sources as distinct entity kinds
+
+_Date: 2026-09-08_
+
+**Decision:** Every row in the company list carries an `entity_type`. Only
+`employer` rows get roles tracked. `board`, `agency`, `investor` and `community`
+rows are *sources* — things that yield companies — and are explicitly excluded
+from role tracking rather than attempted and silently failing.
+
+Board tokens come primarily from a **user-maintained `Board URL` column** in the
+sheet, parsed into platform + token. Automatic resolution is demoted from the
+mechanism to an assist.
+
+**Rationale:** R-002 measured 19% resolution against the falsification bar of
+50%. Two causes: ~16 of 36 rows are not employers and cannot be resolved in
+principle, and 13 of 18 actual employers run career pages with no ATS signature.
+Fixing only the denominator would not have cleared the bar, so automatic
+resolution cannot carry the design.
+
+Manual entry inverts the economics. Pasting a board URL is one click from a
+careers page, ~20 employers is minutes of one-time work, and it yields near-total
+coverage of the rows that matter — where auto-resolution caps around 31%. It also
+degrades honestly: a company with no board URL and no ATS is *recorded as
+unresolvable with a reason*, not missing.
+
+**Alternatives rejected:** auto-classification of entity type (unreliable, and
+the cost of a wrong classification is a silently untracked company); defaulting
+blank types to `employer` (recreates the exact silent-failure mode this fixes —
+blank defaults to `unknown` and is surfaced as a count); a local mapping file
+instead of sheet columns (splits the source of truth away from the list the user
+actually maintains).
+
+**Revisit if:** the list grows past a few hundred rows, where manual entry stops
+being trivial and auto-resolution earns its keep again.
+
+---
+
+## [O-004] Decision: The sheet is input-only; Scout stays read-only
+
+_Date: 2026-09-08_
+
+**Decision:** Scout never writes to the Google Sheet. The sheet is a
+user-maintained *input*: company name, comments, link, `Type`, `Board URL`.
+Everything derived — tokens, roles, snapshots, diffs, resolution status — lives
+in DuckDB. Credentials remain read-only, and the `drive.readonly` scope is
+dropped as unused, leaving a single scope: `spreadsheets.readonly`.
+
+**Rationale:** Tracing the write use cases found only one — a one-time pre-fill
+of 36 cells in two new columns. That is a paste. Against it: the service-account
+key would gain the power to modify or clear six months of hand-curated data, in a
+public repository, permanently, to save a single manual action. Detection of a
+leaked key happens *after* exposure.
+
+Keeping the sheet input-only also keeps the data flow one-directional, which
+means there is no reconciliation question ("the sheet and DuckDB disagree — which
+wins?") to answer later.
+
+**Alternatives rejected:** write access with append-only discipline (the
+discipline is in our code, the permission is not — a bug or a leaked key ignores
+it); write access confined to a separate tab (Sheets permissions are
+per-spreadsheet, not per-tab, so the isolation is convention rather than
+enforcement).
+
+**Revisit if:** T-006 (harvesting sources to discover companies) is built.
+Appending newly-found employers to the sheet is a genuine write use case, and the
+scope should be widened then — earned by a feature that needs it, not in advance.

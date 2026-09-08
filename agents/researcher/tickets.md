@@ -27,7 +27,7 @@ curated company list.
 
 ### R-002 · Measure resolution rate over the full company list
 
-**Status:** open
+**Status:** closed
 **Type:** research
 **Priority:** medium
 **Created:** 2026-09-08
@@ -52,6 +52,18 @@ and the design must be re-passed rather than pushed forward.
 Confidence must be stated on the resulting finding. Do not open v2 platform
 tickets before this closes — otherwise we are guessing which platforms matter.
 
-**Blockers:** E-004
-**Artifacts:** `agents/shared/findings.md` (pending)
-**Closed:** —
+**Note on sequencing:** ran ahead of E-004 rather than after it. The ticket was
+blocked on E-004 on the assumption that resolution needed the production
+implementation, but R-001's probe scripts were enough to answer it — and the
+answer gates E-003/E-004, so measuring first avoided building on a false premise.
+
+**Result: 7/36 (19%). Falsification criterion FAILED** (`plan.md` lens 4 set the
+bar at 50%). Link-seeding contributed **0**, retracting an R-001 claim. Root
+cause is both a mis-specified denominator (~16 of 36 rows are job boards,
+agencies or VCs, not employers) and genuine coverage limits (13 of 18 employers
+run career pages with no ATS signature at all).
+
+**Blockers:** E-004 (removed — ran with R-001 tooling instead)
+**Artifacts:** `agents/shared/findings.md` → "[R-002] ATS-only resolution
+measures 19%", `agents/researcher/findings/sweep.py`, `sweep_results.json`
+**Closed:** 2026-09-08

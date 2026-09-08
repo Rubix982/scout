@@ -103,6 +103,23 @@ Work:
 Keep the existing delta-sync structure — fetch/diff/insert/delete is sound and
 worth preserving.
 
+**Updated 2026-09-08** — sheet access is now verified live: one worksheet
+`Sheet1`, headers `Company Name | Comments | Link`, 36 data rows, no blanks, no
+duplicates, 25 rows carrying a link. Two concrete findings for this ticket:
+
+- `get_all_records()` returns a **phantom fourth key** `''` in every record
+  (`{'Company Name': 'wolt', ..., '': ''}`) because the grid is 1001x27 and
+  header inference picks up a trailing empty column. Strip it; do not let it
+  reach the insert mapping.
+- gspread masks API errors: `client.py:173` catches the informative `APIError`
+  and re-raises a bare `PermissionError`, discarding the message. This cost a
+  wrong diagnosis during setup (a disabled Sheets API read as "sheet not
+  shared"). Wrap sheet access so the underlying reason surfaces —
+  `SERVICE_DISABLED` vs. genuinely-not-shared vs. bad URL.
+
+Per the R-002 re-pass, the ingest also reads two new user-maintained columns,
+`Type` (E-010) and `Board URL` (E-011).
+
 **Acceptance:** a dry-run sync against the real sheet reports 0 changes on a
 second consecutive run.
 
@@ -148,17 +165,24 @@ Set a descriptive User-Agent, a per-request timeout, and retry with backoff on
 normalized roles; `fetch("swissborg")` on Lever and `fetch("checkly")` on Ashby
 each return the counts recorded in R-001.
 
-**Blockers:** E-001
+**Re-scoped 2026-09-08 (R-002 re-pass):** v1 stays Greenhouse (+EU), Lever and
+Ashby — these cover all 7 companies R-002 resolved plus `ada engage`. Further
+platforms are **demand-driven, not speculative**: build what the `Board URL`
+column actually contains (E-011). R-002 found JazzHR, Rippling and
+SmartRecruiters/Workday among the employers, but adding them blind buys ~4
+companies and leaves the real modelling problem untouched.
+
+**Blockers:** E-011
 **Artifacts:** `src/sources/ats/` (`base.py`, `greenhouse.py`, `lever.py`, `ashby.py`)
 **Closed:** —
 
 ---
 
-### E-004 · Board-token resolution + persistent cache
+### E-004 · Automatic token resolution (assist only)
 
 **Status:** open
 **Type:** implement
-**Priority:** high
+**Priority:** low
 **Created:** 2026-09-08
 **Updated:** 2026-09-08
 **Estimated:** 4h
@@ -199,8 +223,17 @@ do not silently drop the company.
 Cherry Ventures resolves via link seed to Greenhouse EU; unresolved companies are
 recorded with `status='unresolved'`, never omitted.
 
-**Blockers:** E-003
-**Artifacts:** `src/sources/ats/resolve.py`, `src/db/init.py`
+**Re-scoped 2026-09-08 (R-002 re-pass):** demoted from the primary mechanism to
+an assist, and from high to low priority. Measured 7/36 (19%) across the full
+sheet, with link-seeding contributing **0** — retracting the claim in this
+ticket's original description that link seeding "is the only route that recovers
+EU-Greenhouse tenants and is highest-precision." It recovers nothing on the real
+data. Manual entry (E-011) is now the primary path; this ticket is worth doing
+only as a convenience for when the list grows, and must never outrank
+`resolution_method = 'manual'`.
+
+**Blockers:** E-011
+**Artifacts:** `src/sources/ats/resolve.py`, `src/db/migrations.py`
 **Closed:** —
 
 ---
@@ -478,3 +511,101 @@ Added a rollback test asserting a failing migration leaves no partial schema.
 **Artifacts:** `src/db/migrations.py`, `src/db/init.py`, `src/db/__init__.py`,
 `tests/test_duckdb.py`, `tests/conftest.py`
 **Closed:** 2026-09-08
+
+---
+
+### E-010 · Entity taxonomy: separate employers from sources
+
+**Status:** open
+**Type:** implement
+**Priority:** high
+**Created:** 2026-09-08
+**Updated:** 2026-09-08
+**Estimated:** 3h
+
+**Description:**
+Consequence of the R-002 design re-pass. The company list holds two different
+kinds of thing and currently models only one:
+
+- an **employer** yields *roles* to track
+- a **source** (board / agency / investor / community) yields *companies* to add
+
+Scout treats sources as employers and fails to resolve them, which is why the
+19% figure was measured against the wrong population. ~16 of 36 rows are sources.
+
+Work:
+- Migration 002: `companies` table with `company_name` (PK), `entity_type`,
+  `comments`, `link`, `board_url`, `synced_at`.
+- `entity_type` ∈ {`employer`, `board`, `agency`, `investor`, `community`,
+  `unknown`}. **Blank in the sheet maps to `unknown`, never to `employer`** —
+  defaulting to employer would recreate the silent-failure mode this ticket
+  exists to remove.
+- Read the type from a new `Type` column in the sheet (user-maintained; see
+  `agents/shared/entity_classification_proposal.md` for a pre-filled proposal
+  covering all 36 rows).
+- Role tracking selects `WHERE entity_type = 'employer'` only. Everything else
+  is recorded and visibly excluded, with the exclusion reported as a count.
+- Reject unknown `entity_type` values loudly at sync time rather than coercing
+  them — a typo'd type must not silently become an untracked company.
+
+Two rows the sweep actively got wrong, both fixed by this ticket: `Greenhouse`
+resolved to the ATS vendor's own 18 roles when it was listed as a route to
+`cherryventures`; `OnHires/482 Solutions` contributed 47 *client* roles that
+would corrupt any role-mix trend. Both inflated the 19% upward — true employer
+resolution is 5/19.
+
+**Acceptance:**
+- A sheet row typed `board` is stored and never attempted for role fetching.
+- A row with a blank type is stored as `unknown` and appears in the excluded
+  count, not in the employer set.
+- An unrecognised type value fails the sync with a message naming the row.
+
+**Blockers:** E-002
+**Artifacts:** `src/db/migrations.py`, `src/db/companies.py`, `tests/`
+**Closed:** —
+
+---
+
+### E-011 · Board URL as the primary resolution path
+
+**Status:** open
+**Type:** implement
+**Priority:** high
+**Created:** 2026-09-08
+**Updated:** 2026-09-08
+**Estimated:** 3h
+
+**Description:**
+R-002 demoted automatic token resolution from the mechanism to an assist:
+measured 19% overall, ~31% ceiling even after adding three platforms, and 13 of
+18 employers have no ATS signature at all. Manual entry inverts the economics —
+one click from a careers page, ~20 employers, minutes of one-time work.
+
+Work:
+- Read a `Board URL` column from the sheet and parse it into
+  (`platform`, `token`). Reuse and extend the link patterns already validated in
+  R-001/R-002 (`agents/researcher/findings/sweep.py`), including the Greenhouse
+  EU host, which is a **separate tenancy** from the US one.
+- Populate `company_ats` (migration 003) with
+  `resolution_method = 'manual'`, which outranks every automatic method.
+- Validate each parsed token against the live API on entry, content-based, and
+  report the role count back so a typo is caught immediately rather than
+  surfacing as "0 roles" weeks later.
+- An employer with no `Board URL` and no automatic resolution is recorded with
+  `status = 'unresolved'` **and a reason** (`no_ats_detected`,
+  `platform_unsupported`, `token_not_found`). Never silently absent.
+- Platform support is now demand-driven: once board URLs are entered we know
+  exactly which platforms are needed. R-002 found JazzHR (everli), Rippling
+  (fabric) and SmartRecruiters/Workday (medable) among the employers — do not
+  build these speculatively, build what the entered URLs actually require.
+
+**Acceptance:**
+- Pasting `https://boards.greenhouse.io/wolt` resolves to
+  greenhouse/`wolt` with a live role count.
+- Pasting a malformed or dead board URL fails at entry with a message, not later.
+- `ada engage` resolves once its board URL is supplied (R-002 confirmed
+  Greenhouse but the token is neither `ada` nor `adaengage`).
+
+**Blockers:** E-010
+**Artifacts:** `src/sources/ats/resolve.py`, `src/db/migrations.py`, `tests/`
+**Closed:** —

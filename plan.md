@@ -81,16 +81,78 @@ hidden. *"200 OK means nothing on SmartRecruiters"* → content-based validation
 (R-001). *"your tokens rot"* → re-validation on every run, resolution method
 recorded per company. *"postings ≠ strategy"* → conceded explicitly in lens 5.
 
+## Design re-pass — 2026-09-08 (R-002)
+
+**Phase 2 is halted.** Not blocked on a ticket — halted on a failed
+falsification test, per design rule 2 (the WHY gate is a stop condition) and
+rule 6 (a wrong design decision is revisited, not buried).
+
+**What broke:** lens 4 set the bar at "fails if resolution lands under ~50% even
+with link-seeding." R-002 measured **7/36 = 19%** across the full sheet.
+Link-seeding contributed **0**, retracting a claim R-001 had extrapolated from
+three hand-picked examples.
+
+**Why it broke — two independent causes, neither sufficient alone:**
+
+1. *Mis-specified denominator (my error, lens 3).* ~16 of 36 rows are job
+   boards, talent marketplaces, recruiting agencies, VCs or communities — not
+   employers. No ATS can resolve them *in principle*. The sheet's own Comments
+   column says so ("They are VCs. Visit their site to find companies"). Lens 3
+   asked which sibling questions must hold for the answer to be believed, and
+   "are these all even employers?" was not among them. It should have been.
+2. *Genuine coverage limit.* Of 18 plausible employers, **13 run career pages
+   with no ATS signature at all**. The 4 detectable ones sit mostly outside v1
+   scope (JazzHR, Rippling, SmartRecruiters/Workday); only `ada engage`
+   (Greenhouse) was an in-scope miss, and only because its token is neither
+   `ada` nor `adaengage`.
+
+Corrected ceiling: ~11/36 (31%), or ~52% of actual employers, and only after
+adding three platforms. **Fixing the denominator alone would not have saved the
+criterion** — this is not a metric dispute resolved in the design's favour.
+
+**What survives:** ATS is still the right *source* where it applies —
+authoritative, free, structured, timestamped, 540 real roles retrieved across 7
+companies. What fails is the assumption that token resolution can be
+*automatic*. Manual entry for ~20 employers is a one-time task of minutes.
+
+**Structural finding, larger than the metric:** the sheet holds two different
+kinds of thing. An *employer* yields roles to track. A *source* (job board, VC,
+agency, community) yields **companies** to add. Scout currently models only the
+first, and silently treats the second as a broken instance of it. Until the data
+model distinguishes them, every coverage number measured is against the wrong
+population.
+
+**Resolution (chosen 2026-09-08):** model employers and sources as distinct
+entity kinds; make user-supplied board URLs the primary resolution path. See
+`agents/shared/decisions.md` → "[O-003]". Lenses re-passed:
+
+- **3 Completeness** — now includes "is this row even an employer?" as a sibling
+  question that must hold before any coverage number means anything.
+- **4 Falsification** — new criterion: the design fails if, *with board URLs
+  supplied*, fewer than ~80% of rows typed `employer` resolve. Manual entry
+  should approach total coverage; if it does not, the source itself is wrong.
+- **5 Method** — ATS retained as the source. Automatic resolution demoted from
+  mechanism to assist. Platform support becomes demand-driven rather than
+  speculative.
+- **8 Scope** — v1 adds entity typing and manual board URLs; automatic
+  resolution and source harvesting (T-006) move out.
+- **9 Deliverable** — the report must state the excluded-source count and the
+  unresolved-employer count with reasons, so coverage is never overstated.
+
 ## Current Phase
 
-Phase 1 — **Infrastructure coherence.** No connector work begins until ingestion,
+Phase 1 — **Infrastructure coherence** (4/5 closed; E-002 remaining). No connector work begins until ingestion,
 config, and storage cooperate. Rationale: the repo currently cannot even be
 installed (E-007), nothing imports (E-001), one env file is loaded nowhere
 (E-008), and schema changes silently do not apply (E-009). Writing ATS adapters
 on top of that would mean debugging fetch logic and broken plumbing at the same
 time, with no way to tell which layer failed.
 
-Phase 2 — ATS ingestion core (E-003 → E-006), unblocked only once Phase 1 closes.
+Phase 2 — **Entity model + ingestion**, re-scoped after the R-002 re-pass:
+E-002 → E-010 → E-011 → E-003 → E-005 → E-006.
+
+Phase 3 — Automatic resolution as a convenience (E-004), and source harvesting
+(T-006). Both explicitly out of v1.
 
 ## Active Tickets
 
@@ -103,18 +165,23 @@ Execution order, not ID order.
 | 3 | E-008 | Engineer   | Single config layer                          | closed | 1 |
 | 4 | E-009 | Engineer   | Storage schema coherence + migrations        | closed | 1 |
 | 5 | E-002 | Engineer   | Reconcile Sheets ingest with the real sheet  | open   | 1 |
-| 6 | E-003 | Engineer   | ATS adapters: Greenhouse/EU, Lever, Ashby    | open   | 2 |
-| 7 | E-004 | Engineer   | Board-token resolution + cache               | open   | 2 |
-| 8 | E-005 | Engineer   | Role snapshots + run-over-run diffing        | open   | 2 |
-| 9 | E-006 | Engineer   | `scout report` CLI                           | open   | 2 |
-| — | R-002 | Researcher | Measure resolution rate over the full sheet  | open   | 2 |
+| 6 | E-010 | Engineer   | Entity taxonomy: employers vs sources        | open   | 2 |
+| 7 | E-011 | Engineer   | Board URL as primary resolution path         | open   | 2 |
+| 8 | E-003 | Engineer   | ATS adapters: Greenhouse/EU, Lever, Ashby    | open   | 2 |
+| 9 | E-005 | Engineer   | Role snapshots + run-over-run diffing        | open   | 2 |
+| 10| E-006 | Engineer   | `scout report` CLI                           | open   | 2 |
+| — | E-004 | Engineer   | Automatic resolution (assist, low priority)  | open   | 3 |
+| — | R-002 | Researcher | Measure resolution rate over the full sheet  | closed | 2 |
 
 ## Blocked
 
-| ID    | Blocked By                                      |
-| ----- | ----------------------------------------------- |
-| E-002 | — (unblocked; live acceptance needs Sheets creds) |
-| E-003 | E-002                                           |
+| ID    | Blocked By                                        |
+| ----- | ------------------------------------------------- |
+| E-002 | — (unblocked; Sheets access now verified working) |
+| E-010 | E-002                                             |
+| E-011 | E-010                                             |
+| E-003 | E-011                                             |
+| E-004 | E-011 (deferred to Phase 3 — assist only)         |
 | E-004 | E-003          |
 | E-005 | E-004          |
 | E-006 | E-005          |
@@ -129,14 +196,14 @@ Execution order, not ID order.
 - E-001 · Bootstrap repaired — imports, import-time side effects, shared DB connection, logger attribution
 - E-008 · Config layer — `src/config.py`; fixed `common.env` being validated but never loaded
 - E-009 · Migrations — `schema_version` + transactional ordered migrations; tests isolated from the real DB
+- R-002 · Full-sheet resolution measured at 19% — falsification criterion failed; Phase 2 halted pending re-pass
 
 ## Next Orchestrator Action
 
-E-002 is the last Phase 1 ticket and is unblocked. Its unit-level acceptance can
-be met with fixtures; its live acceptance ("a second consecutive sync reports 0
-changes") needs Google Sheets credentials in `secrets/gcp/.env`, which are not
-present in the working tree. Implement against fixtures, then close only once a
-live run confirms it.
+Sheets access is now verified live, so E-002 can be both built and closed for
+real. It is the last Phase 1 ticket and the gate for the re-scoped Phase 2.
 
-Hold all of Phase 2 until E-002 closes: an adapter that cannot be run against
-real storage is an adapter that has not been tested.
+Before E-010 can be built, Saif needs to add two columns to the sheet — `Type`
+and `Board URL` — since both are user-maintained by design (auto-classification
+was rejected in O-003). A pre-filled proposal for all 36 rows, with 11 rows
+flagged uncertain, is in `agents/shared/entity_classification_proposal.md`.

@@ -69,3 +69,17 @@ Threads
             T-003 · defining competitor/peer sets
             T-004 · mechanics of "alignment"
             T-005 · JD text — available? worth storing?
+
+### T-006 · Should sources be harvested for companies automatically?
+
+**Status:** open
+**Parent:** —
+**Opened:** 2026-09-08
+**Question:** E-010 establishes that ~16 rows are *sources* — job boards, VCs,
+agencies, communities that yield companies. v1 records them and excludes them
+from role tracking. The obvious next step is harvesting them: scrape
+foundrgroup's portfolio page, or honeypot's company list, to discover employers
+automatically. That is how the original motivation ("many companies went
+unnoticed by me") actually gets solved — but it is a distinct capability with its
+own per-source scraping burden, and it should not be smuggled into v1.
+**Answer:** —

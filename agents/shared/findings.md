@@ -94,3 +94,93 @@ given list to need link-seeding or manual entry. ATS-only is authoritative where
 it hits and silent where it does not — it is not a complete-coverage strategy,
 and the design must show which companies are unresolved rather than quietly
 omitting them.
+
+---
+
+## [R-002] Finding: ATS-only resolution measures 19% — falsification criterion FAILED
+
+_Date: 2026-09-08_
+
+Ran token resolution across all 36 rows of the real sheet (326 probes, 6
+platforms, content-based validation). Script: `agents/researcher/findings/sweep.py`,
+raw output: `sweep_results.json`.
+
+**Result: 7/36 resolved (19%).** `plan.md` lens 4 set the falsification
+criterion at "fails if resolution lands under ~50% even with link-seeding."
+**The test failed as specified.** Confidence: high — this is the full population,
+not a sample.
+
+| Company | Platform | Token | Roles |
+| :-- | :-- | :-- | --: |
+| wolt | greenhouse | `wolt` | 240 |
+| affirm | greenhouse | `affirm` | 205 |
+| OnHires/482 Solutions | ashby | `onhires` | 47 |
+| fingerprint | greenhouse | `fingerprint` | 23 |
+| Greenhouse | greenhouse | `greenhouse` | 18 |
+| Checkly | ashby | `checkly` | 4 |
+| Swissborg | lever | `swissborg` | 3 |
+
+540 roles total. By method: **generated 7, link_seed 0.**
+
+### Link-seeding contributed nothing — prior claim retracted
+
+R-001 asserted the `Link` column would recover what candidate generation
+misses. Measured: **zero.** Of 25 rows with links, only 3 contain a board
+token, and all 3 fail — `strapi`'s Lever board is dead, `fingerprint`'s URL
+carries a `gh_jid` marker but no token (and it resolved by generation anyway),
+and `cherryventures` on Greenhouse EU returns no open roles. Most links point
+at individual postings, aggregators, or homepages. The R-001 claim was
+extrapolated from three hand-picked examples and did not survive the full
+population.
+
+### Root cause is twofold, and neither alone rescues the design
+
+**(a) The denominator is wrong — my design error.** The sheet conflates three
+kinds of entity, and only the first is ATS-resolvable *even in principle*:
+
+- **Employers** (~20): track their roles. wolt, affirm, everli, medable, Clari, billie…
+- **Job boards / talent marketplaces / agencies** (~13): honeypot, web3 careers,
+  landing jobs, remotely works, vanhack, x-team, piper companies,
+  Turn block Talent, workwithscout, join, skipp, buildspace.co, Greenhouse (an
+  ATS vendor). These are *sources that yield companies*, not companies whose
+  roles you track.
+- **Investors / communities** (~3): foundrgroup, Sams social, joi.studio.
+
+The sheet says this itself. `foundrgroup`'s Comment reads *"They are VCs. Visit
+their site to find companies"*; `Sams social`'s reads *"find companies from here
+and apply separately"*. Measuring ATS coverage against ~16 non-employers is a
+category error, and lens 3 (Completeness) should have caught it before the
+sweep ran.
+
+**(b) Coverage is genuinely limited too.** Platform detection across 18
+plausible employers (`scratchpad/detect.py`):
+
+| Detected ATS | Companies |
+| :-- | :-- |
+| jazzhr | everli |
+| smartrecruiters / workday | medable |
+| rippling | fabric |
+| greenhouse | ada engage (**token is not `ada`/`adaengage` — missed by generation**) |
+| **no ATS marker at all** | **13 of 18** — Tendermint, moralis, Clari, flydevs, skipp, strapi, billie, sideos, soar, amondo, joi.studio, e-farm, x-team |
+
+So 13 of 18 employers run custom career pages with no ATS signature. Only
+`ada engage` is an in-scope platform we simply failed to tokenize.
+
+### Corrected estimate, and why it still does not clear the bar
+
+Realistic ceiling: 7 today + ~1 (fix `ada`) + ~3 (add Rippling, JazzHR,
+SmartRecruiters) ≈ **11/36 (31%)**, or ~**52% of the ~20 actual employers**.
+
+Even on the corrected denominator this only just reaches the threshold, and
+only after adding three platforms. **Automatic resolution cannot be the primary
+mechanism.** That conclusion stands on the measurement, not on the metric
+dispute — fixing the denominator alone would not have saved it.
+
+### What this does not overturn
+
+ATS remains the right *source* where it applies: authoritative, free,
+structured, timestamped, 540 real roles retrieved. What fails is the assumption
+that resolution can be automatic. Manual token entry for ~20 employers is a
+one-time task of minutes and yields near-total coverage of what actually
+matters — auto-resolution belongs as an assist for when the list grows, not as
+the mechanism the design depends on.
