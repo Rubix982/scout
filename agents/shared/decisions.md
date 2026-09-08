@@ -185,3 +185,35 @@ arbitrarily); fetching `content=true` only for boards whose department is empty
 
 **Revisit if:** payload size starts to matter — e.g. many more boards, or running
 somewhere metered. `include_content=False` remains available per call.
+
+---
+
+## [E-005] Decision: `Role` is a domain model, not a source type
+
+_Date: 2026-09-08_
+
+**Decision:** `Role` lives in `src/common/models.py`. Both the ATS adapters
+(which produce it) and the storage layer (which persists it) import it from
+there. `src/sources/ats/roles.py` re-exports it for existing callers.
+
+**Rationale:** `Role` was originally defined in `src/sources/ats/roles.py`, so
+`src/db/roles.py` had to import *from the sources layer* to persist it — storage
+depending on ingestion, which is backwards. That inversion produced a real
+import cycle the moment the snapshot runner needed both: `src.db.roles` →
+`src.sources.ats` → `.snapshot` → `src.db.roles`, and `ChangeType` could not be
+imported from a partially initialised module.
+
+Patching the cycle (deferred imports, `TYPE_CHECKING` guards) would have hidden
+the layering problem rather than fixed it. Moving the shared type to a neutral
+module removes it by construction: both layers now depend on the model, and
+neither depends on the other.
+
+Also removed the `snapshot` re-export from `src/sources/ats/__init__.py` — the
+runner orchestrates storage *and* sources, so it does not belong on a leaf
+package's public surface.
+
+`EnrichedCompany`, the only prior occupant of `models.py`, was dead
+outreach-era code; moved to `agents/engineer/workspace/deferred/` per O-001.
+
+**Revisit if:** more shared domain types appear and `models.py` starts to sprawl,
+at which point it wants splitting by concern rather than sitting as one module.

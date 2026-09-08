@@ -204,13 +204,79 @@ _BOARD_URL_AND_ATS = (
     "CREATE INDEX IF NOT EXISTS idx_company_ats_status ON company_ats(status);",
 )
 
+# --- 005: roles + runs + role_changes (E-005) ---------------------------------
+# `roles` is keyed on (platform, token, external_id) -- the stable ATS id, never
+# the title. R-002 noted reposts and title churn; keying on title would
+# manufacture phantom "new role" events.
+#
+# `runs` exists so a diff is always *between two runs*, and so a partial or
+# failed run cannot corrupt `closed_at`: roles are only closed for companies
+# that were successfully fetched in that run.
+#
+# `role_changes` is the audit trail. Because `roles` rows are updated in place,
+# a field-level history is the only way to answer "what changed since last
+# week" -- and E-003 established that two of three platforms report no
+# `updated_at`, so change detection compares content rather than timestamps.
+_ROLES_AND_RUNS = (
+    "CREATE SEQUENCE IF NOT EXISTS runs_seq START 1;",
+    """
+    CREATE TABLE IF NOT EXISTS runs (
+      run_id BIGINT PRIMARY KEY DEFAULT nextval('runs_seq'),
+      started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      finished_at TIMESTAMP,
+      companies_attempted INTEGER DEFAULT 0,
+      companies_fetched INTEGER DEFAULT 0,
+      companies_failed INTEGER DEFAULT 0,
+      roles_seen INTEGER DEFAULT 0
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS roles (
+      platform TEXT,
+      token TEXT,
+      external_id TEXT,
+      company_name TEXT,
+      title TEXT,
+      location TEXT,
+      department TEXT,
+      url TEXT,
+      first_published TEXT,
+      updated_at TEXT,
+      raw TEXT,
+      first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      closed_at TIMESTAMP,
+      first_seen_run BIGINT,
+      last_seen_run BIGINT,
+      PRIMARY KEY (platform, token, external_id)
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_roles_company ON roles(company_name);",
+    "CREATE INDEX IF NOT EXISTS idx_roles_open ON roles(closed_at);",
+    """
+    CREATE TABLE IF NOT EXISTS role_changes (
+      run_id BIGINT,
+      platform TEXT,
+      token TEXT,
+      external_id TEXT,
+      company_name TEXT,
+      title TEXT,
+      change_type TEXT,
+      field TEXT,
+      old_value TEXT,
+      new_value TEXT,
+      changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_role_changes_run ON role_changes(run_id);",
+)
+
 MIGRATIONS: Tuple[Migration, ...] = (
     Migration(version=1, name="baseline", statements=_BASELINE),
     Migration(version=2, name="companies", statements=_COMPANIES),
     Migration(version=3, name="entity_type", statements=_ENTITY_TYPE),
     Migration(version=4, name="board_url_and_ats", statements=_BOARD_URL_AND_ATS),
-    # Remaining tracker tables are added by their owning tickets:
-    #   005 roles + runs (E-005)
+    Migration(version=5, name="roles_and_runs", statements=_ROLES_AND_RUNS),
 )
 
 

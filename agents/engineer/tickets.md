@@ -319,7 +319,7 @@ only as a convenience for when the list grows, and must never outrank
 
 ### E-005 · Role snapshots + run-over-run diffing
 
-**Status:** open
+**Status:** closed
 **Type:** implement
 **Priority:** high
 **Created:** 2026-09-08
@@ -348,9 +348,57 @@ run. A company that errored must not have its whole role set marked closed.
 diff; a simulated removed role gets `closed_at` set; a simulated company fetch
 failure closes nothing.
 
+**Result — verified on live data:**
+
+```
+run 1: 5/5 boards fetched, 477 roles, all `appeared` (flagged as baseline)
+run 2: 5/5 boards fetched, 477 roles, zero changes
+drop one Checkly role  -> closed   (477 -> 476 open)
+restore it             -> reopened (476 -> 477 open), NOT appeared
+```
+
+Migration 005 adds `roles`, `runs` and `role_changes`. Roles are keyed on
+`(platform, token, external_id)`.
+
+**Why identity is the ATS id, proven by the data:** wolt lists
+"Grocery Associate" **14 times** under distinct ids, "Sales Manager" 7 times,
+"Retail Grocery Assistant" 5 times. Affirm lists
+"Analyst II, Full Stack (Revenue Analytics)" twice. Title-keying would collapse
+those and churn on every run.
+
+**The guardrail:** `snapshot_company()` is only called for a company whose fetch
+*succeeded*. `src/sources/ats/snapshot.py` calls the fetcher directly rather
+than via `fetch_roles()`, because `fetch_roles` returns `[]` on failure and that
+collapses the one distinction that matters — "fetched, zero roles" (close
+everything) versus "fetch failed" (close nothing). Three tests cover it: HTTP
+500 closes nothing, a transport error closes nothing, and a *successful* empty
+board does close everything. One company failing does not block the others.
+
+Change detection compares content, not timestamps, per E-003: only Greenhouse
+reports `updated_at`, so a timestamp design would silently never detect changes
+on Lever or Ashby. `role_changes` is the audit trail, since `roles` rows are
+updated in place.
+
+`department_mix()` returns **shares, not counts** — company size co-varies with
+posting volume, so counts compare headcount rather than focus (plan.md lens 6).
+
+**Bug found by a test:** `role_changes` had no `title` column, so
+`_record_change` silently dropped it and `changes_for_run` failed on a binder
+error. Migration 005 was uncommitted and local-only, so it was amended rather
+than patched by a 006 minutes later; the local database was rebuilt, which cost
+nothing since it holds only derived data.
+
+**Layering fix:** see decisions.md → "[E-005] `Role` is a domain model". The
+snapshot runner exposed an inversion where storage imported from sources.
+
+**Suite:** 179 passed (was 155). The import-purity guard now covers all 20
+modules.
+
 **Blockers:** E-004
-**Artifacts:** `src/db/roles.py`, `src/db/init.py`
-**Closed:** —
+**Artifacts:** `src/db/roles.py`, `src/db/migrations.py`, `src/common/models.py`,
+`src/sources/ats/snapshot.py`, `src/sources/ats/roles.py`, `src/main.py`,
+`tests/test_roles_snapshot.py`, `tests/test_bootstrap.py`
+**Closed:** 2026-09-08
 
 ---
 

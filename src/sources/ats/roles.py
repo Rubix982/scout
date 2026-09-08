@@ -43,41 +43,16 @@ JD text arrives too.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from src.common.models import Role
 from src.log import get_logger
 from src.sources.ats.platforms import ENDPOINTS, Platform
 
 logger = get_logger("ats.roles")
 
 Fetcher = Callable[[str], Tuple[Optional[int], bytes]]
-
-
-@dataclass(frozen=True)
-class Role:
-    """One open role, normalised across platforms."""
-
-    platform: str
-    token: str
-    external_id: str
-    title: str
-    location: str
-    department: str
-    url: str
-    first_published: Optional[str]
-    updated_at: Optional[str]
-    raw: str
-
-    @property
-    def identity(self) -> Tuple[str, str, str]:
-        """Stable identity for diffing.
-
-        Keyed on the ATS id, never the title: R-002 noted reposts and title
-        churn, and keying on title would manufacture phantom "new role" events.
-        """
-        return (self.platform, self.token, self.external_id)
 
 
 def _epoch_ms_to_iso(value: Any) -> Optional[str]:
@@ -222,3 +197,6 @@ def fetch_roles(
         logger.warning("[ROLES] %s/%s: HTTP %s", platform.value, token, status)
         return []
     return parse_roles(platform, token, body)
+
+
+__all__ = ["Role", "endpoint_for", "fetch_roles", "parse_roles"]

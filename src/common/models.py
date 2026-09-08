@@ -1,39 +1,38 @@
-from typing import List, TypedDict
+# src/common/models.py
+"""Domain models shared across layers.
+
+`Role` lives here rather than in `src/sources/ats/` because both the source
+adapters (which produce it) and the storage layer (which persists it) need it.
+Having storage import from sources was a layering inversion, and it produced an
+import cycle the moment the snapshot runner needed both.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Optional, Tuple
 
 
-class EnrichedCompany(TypedDict):
-    summary: str
-    product: str
-    tags: List[str]
-    investors: List[str]
-    ideal_roles: str
-    recent_news: str
-    tone_advice: str
-    alignment_reason: str
-    suggested_opener: str
-    funding_stage: str
-    technologies_used: str
-    website_url: str
-    industry: str
-    linkedin_company_url: str
-    linkedin_search_links: List[str]
+@dataclass(frozen=True)
+class Role:
+    """One open role, normalised across ATS platforms."""
 
+    platform: str
+    token: str
+    external_id: str
+    title: str
+    location: str
+    department: str
+    url: str
+    first_published: Optional[str]
+    updated_at: Optional[str]
+    raw: str
 
-def get_empty_enriched_company() -> EnrichedCompany:
-    return EnrichedCompany(
-        summary="",
-        product="",
-        tags=[],
-        investors=[],
-        ideal_roles="",
-        recent_news="",
-        tone_advice="",
-        alignment_reason="",
-        suggested_opener="",
-        funding_stage="",
-        technologies_used="",
-        website_url="",
-        industry="",
-        linkedin_company_url="",
-        linkedin_search_links=[],
-    )
+    @property
+    def identity(self) -> Tuple[str, str, str]:
+        """Stable identity for diffing.
+
+        Keyed on the ATS id, never the title: R-002 noted reposts and title
+        churn, and keying on title would manufacture phantom "new role" events.
+        """
+        return (self.platform, self.token, self.external_id)
