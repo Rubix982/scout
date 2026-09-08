@@ -202,4 +202,6 @@ cython_debug/
 #  For example, if you have a file called `secrets.py` that contains sensitive information,
 #  you can add it to this file to prevent it from being committed to version control.
 secrets/gcp/gcloud_service_account.json
-secrets/gcp/secrets.env
+# The local secrets file the config layer actually reads (E-008). Listed
+# explicitly rather than relying on the bare `.env` rule above.
+secrets/gcp/.env
