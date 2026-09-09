@@ -1,65 +1,84 @@
 # src/clients/gsuite.py
-import os
-from typing import List, Dict
+"""Google Sheets read client.
+
+Importing this module has no side effects. All configuration goes through
+`src.config` (E-008). Read-only by design: the sheet is a user-maintained input
+and Scout never writes to it (decision O-004).
+"""
+
+from __future__ import annotations
+
+import json
+from typing import Any, Dict, List
+
 import gspread
 from google.oauth2.service_account import Credentials
-from dotenv import load_dotenv
 
-# Constants
-SCOPES = [
-    "https://www.googleapis.com/auth/spreadsheets.readonly",
-    "https://www.googleapis.com/auth/drive.readonly",
-]
+from src import config
+from src.clients.errors import SheetAccessError, describe
 
-# Load .env variables
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-GCP_SECRETS_DIR = os.path.join(PROJECT_ROOT, "secrets", "gcp")
-GCP_COMMON_ENV_VAR_FILE = os.path.join(GCP_SECRETS_DIR, "common.env")
-GCP_SECRETS_FILE = os.path.join(GCP_SECRETS_DIR, ".env")
+# Least privilege: read-only, and only Sheets. `drive.readonly` was requested but
+# never used -- nothing here calls Drive (open_by_url resolves via the Sheets API
+# alone), and the Drive API is not even enabled on the project. Scout never
+# writes to the sheet; see decisions.md -> "[O-004] The sheet is input-only".
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 
-# Validate secrets
-for path in [GCP_COMMON_ENV_VAR_FILE, GCP_SECRETS_FILE]:
-    if not os.path.isfile(path):
-        raise FileNotFoundError(f"Missing required env file: {path}")
+SheetRow = Dict[str, Any]
 
-# Load the .env file
-load_dotenv(GCP_SECRETS_FILE)
 
-SERVICE_ACCOUNT_FILENAME = os.getenv(
-    "GCLOUD_SERVICE_ACCOUNT_FILENAME", "gcloud_service_account.json"
-)
-SERVICE_ACCOUNT_PATH = os.path.join(GCP_SECRETS_DIR, SERVICE_ACCOUNT_FILENAME)
-
-if not os.path.isfile(SERVICE_ACCOUNT_PATH):
-    raise FileNotFoundError(f"Missing service account file: {SERVICE_ACCOUNT_PATH}")
+def _service_account_email() -> str:
+    """Read the service account address, for error messages only."""
+    try:
+        with open(config.service_account_path()) as f:
+            return json.load(f).get("client_email", "(unknown)")
+    except Exception:
+        return "(unknown)"
 
 
 def get_gsheet_client() -> gspread.Client:
     credentials: Credentials = Credentials.from_service_account_file(
-        SERVICE_ACCOUNT_PATH, scopes=SCOPES
+        str(config.service_account_path()), scopes=SCOPES
     )
     return gspread.authorize(credentials)
 
 
-def get_sheet_data(
-    sheet_url: str, sheet_name: str
-) -> List[Dict[str, int | float | str]]:
-    client: gspread.Client = get_gsheet_client()
-    worksheet: gspread.Worksheet = client.open_by_url(sheet_url).worksheet(sheet_name)
-    return worksheet.get_all_records()
+def _strip_phantom_columns(records: List[SheetRow]) -> List[SheetRow]:
+    """Drop keys produced by unnamed columns.
+
+    The grid is 1001x27 while only three columns are used, so gspread's header
+    inference yields a trailing empty header and every record comes back with a
+    phantom `''` key: {'Company Name': 'wolt', ..., '': ''}. Left alone it flows
+    straight into the insert mapping.
+    """
+    return [{k: v for k, v in row.items() if k.strip()} for row in records]
 
 
-def get_processed_companies() -> List[Dict[str, int | float | str]]:
-    sheet_url = os.getenv("SHEET_URL")
-    sheet_name = os.getenv("PROCESSED_COMPANIES_SHEET_NAME", "Processed Companies")
-    if not sheet_url:
-        raise ValueError("SHEET_URL is not set in the environment.")
-    return get_sheet_data(sheet_url, sheet_name)
+def get_worksheet_records(worksheet_name: str) -> List[SheetRow]:
+    """Read one worksheet as a list of dicts, keyed by header.
+
+    Any failure is re-raised as `SheetAccessError` carrying a message that names
+    the real cause -- gspread discards it otherwise (see `errors.py`).
+    """
+    sheet_url = config.sheet_url()
+    try:
+        client = get_gsheet_client()
+        worksheet = client.open_by_url(sheet_url).worksheet(worksheet_name)
+        records = worksheet.get_all_records()
+    except Exception as exc:
+        raise SheetAccessError(
+            describe(
+                exc, sheet_url=sheet_url, service_account=_service_account_email()
+            )
+        ) from exc
+    return _strip_phantom_columns(records)
 
 
-def get_company_research() -> List[Dict[str, int | float | str]]:
-    sheet_url = os.getenv("SHEET_URL")
-    sheet_name = os.getenv("COMPANY_RESEARCH_SHEET_NAME", "Company Research")
-    if not sheet_url:
-        raise ValueError("SHEET_URL is not set in the environment.")
-    return get_sheet_data(sheet_url, sheet_name)
+def get_companies() -> List[SheetRow]:
+    """Read the company list from the configured worksheet.
+
+    Replaces `get_processed_companies()` / `get_company_research()`, which asked
+    for two worksheets ("Processed Companies", "Company Research") that do not
+    exist -- the two-sheet model was designed but never built. Confirmed live:
+    one worksheet, `Sheet1`, columns `Company Name | Comments | Link`.
+    """
+    return get_worksheet_records(config.get(config.COMPANIES_SHEET_NAME))

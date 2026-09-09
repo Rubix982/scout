@@ -1,0 +1,92 @@
+{
+  "link_seeds": {
+    "Greenhouse": [
+      [
+        "greenhouse_eu",
+        "cherryventures"
+      ]
+    ],
+    "strapi": [
+      [
+        "lever",
+        "strapi"
+      ]
+    ]
+  },
+  "resolved": {
+    "Checkly": {
+      "platform": "ashby",
+      "roles": 4,
+      "token": "checkly",
+      "via": "generated"
+    },
+    "Greenhouse": {
+      "platform": "greenhouse",
+      "roles": 18,
+      "token": "greenhouse",
+      "via": "generated"
+    },
+    "OnHires/482 Solutions": {
+      "platform": "ashby",
+      "roles": 47,
+      "token": "onhires",
+      "via": "generated"
+    },
+    "Swissborg": {
+      "platform": "lever",
+      "roles": 3,
+      "token": "swissborg",
+      "via": "generated"
+    },
+    "affirm": {
+      "platform": "greenhouse",
+      "roles": 205,
+      "token": "affirm",
+      "via": "generated"
+    },
+    "fingerprint": {
+      "platform": "greenhouse",
+      "roles": 23,
+      "token": "fingerprint",
+      "via": "generated"
+    },
+    "wolt": {
+      "platform": "greenhouse",
+      "roles": 240,
+      "token": "wolt",
+      "via": "generated"
+    }
+  },
+  "total": 36,
+  "unresolved": [
+    "everli",
+    "x-team",
+    "Tendermint",
+    "Turn block Talent",
+    "moralis.io",
+    "medable",
+    "Clari",
+    "piper companies",
+    "fabric",
+    "foundrgroup",
+    "vanhack",
+    "buildspace.co",
+    "flydevs",
+    "ada engage",
+    "web3 careers",
+    "landing jobs",
+    "skipp",
+    "join",
+    "remotely works",
+    "honeypot",
+    "strapi",
+    "e farm",
+    "billie",
+    "workwithscout",
+    "sideos",
+    "soar",
+    "amondo",
+    "joi.studio",
+    "Sams social"
+  ]
+}

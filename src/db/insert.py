@@ -1,202 +1,194 @@
-import duckdb
-from typing import List, Dict, Any, Tuple
-from src.db.init import DB_PATH
+# src/db/insert.py
+"""Sheet -> DuckDB delta sync.
+
+Declarative: a `SheetTable` states the worksheet-header -> db-column mapping, and
+one code path handles any table. Previously five parallel `if table_name == ...`
+dispatch functions carried the schema, and column names were reconstructed by
+title-casing the db column (`prettify_column_names`), so renaming a sheet header
+broke the insert silently.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, List, Mapping, Sequence, Tuple
+
+from src.common import entities
+from src.db.init import get_con
 from src.log import get_logger
-from src.common.utils import prettify_column_names
 
-logger = get_logger("insert_ops")
-
-con: duckdb.DuckDBPyConnection = duckdb.connect(str(DB_PATH))  # type: ignore
+logger = get_logger("sync")
 
 
-def get_columns_for_table(table_name: str) -> List[str]:
-    if table_name == "processed_companies":
-        return [
-            "company",
-            "summary",
-            "product",
-            "tags",
-            "investors",
-            "ideal_roles",
-            "recent_news",
-            "tone_advice",
-            "alignment_reason",
-            "suggested_opener",
-            "funding_stage",
-            "technologies_used",
-            "website_url",
-            "industry",
-            "linkedin_company_url",
-            "linkedin_search_links",
-            "company_processed",
-            "email_generated",
-        ]
-    elif table_name == "company_research":
-        return ["company", "company_info", "contact_info"]
-    else:
-        logger.error(f"Unknown table name: {table_name}")
-        raise ValueError(f"Unknown table name: {table_name}")
+class SyncError(RuntimeError):
+    """A row could not be synced; the message names the offending row."""
 
 
-def get_comparison_fields_for_table(table_name: str) -> List[str]:
-    if table_name == "processed_companies":
-        return [
-            "summary",
-            "product",
-            "tags",
-            "investors",
-            "ideal_roles",
-            "recent_news",
-            "tone_advice",
-            "alignment_reason",
-            "suggested_opener",
-            "funding_stage",
-            "technologies_used",
-            "website_url",
-            "industry",
-            "linkedin_company_url",
-            "linkedin_search_links",
-            "company_processed",
-            "email_generated",
-        ]
-    elif table_name == "company_research":
-        return ["company_info", "contact_info"]
-    else:
-        logger.error(f"Unknown table name: {table_name}")
-        raise ValueError(f"Unknown table name: {table_name}")
+@dataclass(frozen=True)
+class SheetTable:
+    """Maps one worksheet onto one DuckDB table."""
+
+    table: str
+    primary_key: str
+    columns: Mapping[str, str]  # sheet header -> db column
+    # db column -> validator. Applied after `normalize`; raising ValueError
+    # fails the sync with the offending row named, rather than coercing a bad
+    # value into something plausible.
+    validators: Mapping[str, Callable[[str], str]] = field(default_factory=dict)
+
+    @property
+    def db_columns(self) -> Tuple[str, ...]:
+        return tuple(self.columns.values())
+
+    @property
+    def compare_columns(self) -> Tuple[str, ...]:
+        return tuple(c for c in self.db_columns if c != self.primary_key)
+
+    @property
+    def primary_key_header(self) -> str:
+        """The sheet header that maps to the primary key, for error messages."""
+        for header, db_col in self.columns.items():
+            if db_col == self.primary_key:
+                return header
+        raise KeyError(f"no sheet header maps to primary key {self.primary_key!r}")
 
 
-def get_primary_key_for_table(table_name: str) -> str:
-    if table_name == "processed_companies":
-        return "Company"
-    elif table_name == "company_research":
-        return "Company"
-    else:
-        logger.error(f"Unknown table name: {table_name}")
-        raise ValueError(f"Unknown table name: {table_name}")
+COMPANIES = SheetTable(
+    table="companies",
+    primary_key="company_name",
+    columns={
+        "Company Name": "company_name",
+        "Comments": "comments",
+        "Link": "link",
+        "Type": "entity_type",
+        "Board URL": "board_url",
+    },
+    validators={"entity_type": entities.parse},
+)
 
 
-def get_primary_db_key_for_table(table_name: str) -> str:
-    if table_name == "processed_companies":
-        return "company"
-    elif table_name == "company_research":
-        return "company"
-    else:
-        logger.error(f"Unknown table name: {table_name}")
-        raise ValueError(f"Unknown table name: {table_name}")
+def normalize(value: Any) -> str:
+    """Render a value into a form comparable across Sheets and DuckDB.
+
+    Sheet cells arrive as strings (`"TRUE"`, `""`), DuckDB returns native types
+    (`True`, `None`). Comparing them raw made every row look changed on every
+    run, so the delta reported 36 updates forever and never converged.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return "TRUE" if value else "FALSE"
+    if isinstance(value, str):
+        return value.strip()
+    return str(value)
 
 
-def insert_into_table(table_name: str, data: List[Dict[str, Any]]) -> None:
-    if not data:
-        logger.warning(f"[INSERT] No data provided to insert into table: {table_name}")
-        return
+def to_db_row(spec: SheetTable, sheet_row: Mapping[str, Any]) -> Dict[str, str]:
+    """Project a sheet record onto db columns via the explicit mapping.
 
-    columns = get_columns_for_table(table_name)
-    placeholders = ", ".join(["?"] * len(columns))
-    column_names = ", ".join(columns)
-    query = (
-        f"INSERT OR REPLACE INTO {table_name} ({column_names}) VALUES ({placeholders})"
-    )
+    Validators run here, so a bad value is rejected before it can reach storage.
+    """
+    record: Dict[str, str] = {}
+    for header, db_col in spec.columns.items():
+        value = normalize(sheet_row.get(header))
+        validator = spec.validators.get(db_col)
+        record[db_col] = validator(value) if validator else value
+    return record
 
-    logger.info(f"[INSERT] Inserting {len(data)} rows into '{table_name}'...")
 
-    for row in data:
+@dataclass(frozen=True)
+class SyncPlan:
+    to_insert: List[Dict[str, str]]
+    to_update: List[Dict[str, str]]
+    to_delete: List[str]
+    unchanged: int
+
+    @property
+    def changes(self) -> int:
+        return len(self.to_insert) + len(self.to_update) + len(self.to_delete)
+
+
+def fetch_existing(spec: SheetTable) -> Dict[str, Dict[str, str]]:
+    cols = ", ".join(spec.db_columns)
+    rows = get_con().execute(f"SELECT {cols} FROM {spec.table}").fetchall()
+    out: Dict[str, Dict[str, str]] = {}
+    for row in rows:
+        record = {col: normalize(val) for col, val in zip(spec.db_columns, row)}
+        out[record[spec.primary_key]] = record
+    return out
+
+
+def compute_plan(
+    spec: SheetTable,
+    existing: Mapping[str, Mapping[str, str]],
+    incoming: Sequence[Mapping[str, Any]],
+) -> SyncPlan:
+    to_insert: List[Dict[str, str]] = []
+    to_update: List[Dict[str, str]] = []
+    unchanged = 0
+    seen: set[str] = set()
+
+    for sheet_row in incoming:
         try:
-            values = [
-                row.get(col_title) for col_title in prettify_column_names(columns)
-            ]
-            con.execute(query, values)
-        except Exception as e:
-            logger.error(
-                f"[INSERT] Failed to insert row with key '{row.get('Company')}' into '{table_name}': {e}"
-            )
+            record = to_db_row(spec, sheet_row)
+        except ValueError as exc:
+            name = normalize(sheet_row.get(spec.primary_key_header)) or "(unnamed row)"
+            raise SyncError(f"{spec.table}: row {name!r}: {exc}") from exc
+        key = record[spec.primary_key]
+        if not key:
+            logger.warning("[SYNC] skipping row with empty %s", spec.primary_key)
+            continue
+        if key in seen:
+            logger.warning("[SYNC] duplicate %s %r -- keeping first", spec.primary_key, key)
+            continue
+        seen.add(key)
 
-
-def fetch_existing_rows(table_name: str, primary_key: str) -> Dict[str, Dict[str, Any]]:
-    try:
-        cursor = con.execute(f"SELECT * FROM {table_name}")
-        result = cursor.fetchall()
-        if cursor.description is None:
-            logger.warning(f"[FETCH] No columns found in table '{table_name}'")
-            return {}
-        columns = [desc[0] for desc in cursor.description]
-        logger.info(
-            f"[FETCH] Retrieved {len(result)} existing rows from '{table_name}'"
-        )
-        return {
-            row[columns.index(primary_key)]: dict(zip(columns, row)) for row in result
-        }
-    except Exception as e:
-        logger.error(f"[FETCH] Error fetching rows from table '{table_name}': {e}")
-        return {}
-
-
-def compute_delta_rows(
-    existing: Dict[str, Dict[str, Any]],
-    incoming: List[Dict[str, Any]],
-    primary_key: str,
-    comparison_fields: List[str],
-) -> Tuple[List[Dict[str, Any]], List[str]]:
-    incoming_dict = {row[primary_key]: row for row in incoming}
-
-    to_insert: List[Dict[str, Any]] = []
-    for key, row in incoming_dict.items():
-        if key not in existing:
-            to_insert.append(row)
+        prior = existing.get(key)
+        if prior is None:
+            to_insert.append(record)
+        elif any(record[c] != prior.get(c, "") for c in spec.compare_columns):
+            to_update.append(record)
         else:
-            if any(row.get(f) != existing[key].get(f) for f in comparison_fields):
-                to_insert.append(row)
+            unchanged += 1
 
-    to_delete = [k for k in existing if k not in incoming_dict]
+    to_delete = [k for k in existing if k not in seen]
+    return SyncPlan(to_insert, to_update, to_delete, unchanged)
 
+
+def apply_plan(spec: SheetTable, plan: SyncPlan) -> None:
+    con = get_con()
+    cols = ", ".join(spec.db_columns)
+    placeholders = ", ".join("?" * len(spec.db_columns))
+    upsert = f"INSERT OR REPLACE INTO {spec.table} ({cols}) VALUES ({placeholders})"
+
+    for record in plan.to_insert + plan.to_update:
+        con.execute(upsert, [record[c] for c in spec.db_columns])
+    for key in plan.to_delete:
+        con.execute(
+            f"DELETE FROM {spec.table} WHERE {spec.primary_key} = ?", [key]
+        )
+
+
+def sync(spec: SheetTable, incoming: Sequence[Mapping[str, Any]]) -> SyncPlan:
+    """Sync `incoming` sheet records into `spec.table`.
+
+    Rows are passed in rather than fetched here, so the delta logic is testable
+    without network access.
+    """
+    plan = compute_plan(spec, fetch_existing(spec), incoming)
+    apply_plan(spec, plan)
     logger.info(
-        f"[DELTA] Delta computed for {primary_key}: {len(to_insert)} to insert/update, {len(to_delete)} to delete"
+        "[SYNC] %s: +%d insert, ~%d update, -%d delete, =%d unchanged",
+        spec.table,
+        len(plan.to_insert),
+        len(plan.to_update),
+        len(plan.to_delete),
+        plan.unchanged,
     )
-    return to_insert, to_delete
+    return plan
 
 
-def get_incoming_for_table(table_name: str) -> List[Dict[str, Any]]:
-    if table_name == "processed_companies":
-        from src.clients.gsuite import get_processed_companies
+def sync_companies() -> SyncPlan:
+    from src.clients import get_companies
 
-        return get_processed_companies()
-    elif table_name == "company_research":
-        from src.clients.gsuite import get_company_research
-
-        return get_company_research()
-    else:
-        logger.error(f"Unknown table name: {table_name}")
-        raise ValueError(f"Unknown table name: {table_name}")
-
-
-def sync_table(table_name: str):
-    logger.info(f"[SYNC] Syncing table: {table_name}")
-    try:
-        incoming = get_incoming_for_table(table_name)
-        primary_key = get_primary_key_for_table(table_name)
-        comparison_fields = get_comparison_fields_for_table(table_name)
-        db_primary_key = get_primary_db_key_for_table(table_name)
-        existing = fetch_existing_rows(table_name, db_primary_key)
-
-        to_insert, to_delete = compute_delta_rows(
-            existing, incoming, primary_key, comparison_fields
-        )
-
-        logger.info(
-            f"[SYNC] {table_name}: {len(to_insert)} insert/update, {len(to_delete)} delete operations"
-        )
-
-        insert_into_table(table_name, to_insert)
-
-        for key in to_delete:
-            try:
-                con.execute(
-                    f"DELETE FROM {table_name} WHERE {db_primary_key} = ?", [key]
-                )
-                logger.info(f"[DELETE] Removed '{key}' from '{table_name}'")
-            except Exception as e:
-                logger.error(
-                    f"[DELETE] Failed to delete '{key}' from '{table_name}': {e}"
-                )
-    except Exception as e:
-        logger.exception(f"[SYNC] Failed syncing table '{table_name}': {e}")
+    return sync(COMPANIES, get_companies())

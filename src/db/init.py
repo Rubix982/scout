@@ -1,157 +1,71 @@
-# init.py
+# src/db/init.py
+"""DuckDB connection ownership and schema bootstrap.
+
+One connection for the process, created on first use. Nothing here runs at
+import time: importing this module must never touch the filesystem, so that
+tests and tooling can import it without side effects (E-001).
+
+Schema creation is delegated to `src.db.migrations` (E-009).
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import List, Optional
 
 import duckdb
-from pathlib import Path
 
-# Create the ~/.scout directory
-SCOUT_DIR = Path.home() / ".scout"
-SCOUT_DIR.mkdir(parents=True, exist_ok=True)
+from src import config
+from src.db.migrations import Migration, apply_pending, current_version
 
-# Path to the DuckDB database file
-DB_PATH = SCOUT_DIR / "scout.db"
-
-# Connect to the DuckDB database
-con: duckdb.DuckDBPyConnection = duckdb.connect(str(DB_PATH))  # type: ignore
+_con: Optional[duckdb.DuckDBPyConnection] = None
 
 
-def init_tables():
-    con.execute(
-        """
-    CREATE TABLE IF NOT EXISTS company_research (
-      company TEXT PRIMARY KEY,
-      company_info TEXT,
-      contact_info TEXT,
-      last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
+def db_path() -> Path:
+    """Resolve the database path, creating its parent directory on demand.
+
+    A function rather than a module constant so that nothing is created merely
+    by importing this module. Honours ``SCOUT_DB_PATH`` via the config layer, so
+    tests never touch the developer's real database.
     """
-    )
+    return config.db_path()
 
-    con.execute(
-        """
-    CREATE TABLE IF NOT EXISTS processed_companies (
-      company TEXT PRIMARY KEY,
-      summary TEXT,
-      product TEXT,
-      tags TEXT,
-      investors TEXT,
-      ideal_roles TEXT,
-      recent_news TEXT,
-      tone_advice TEXT,
-      alignment_reason TEXT,
-      suggested_opener TEXT,
-      funding_stage TEXT,
-      technologies_used TEXT,
-      website_url TEXT,
-      industry TEXT,
-      linkedin_company_url TEXT,
-      linkedin_search_links TEXT,
-      company_processed BOOLEAN DEFAULT FALSE,
-      last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      email_generated BOOLEAN DEFAULT FALSE
-    );
+
+def get_con() -> duckdb.DuckDBPyConnection:
+    """Return the process-wide DuckDB connection, opening it on first call.
+
+    Previously `src/db/init.py`, `src/db/insert.py`, and the enrichment client
+    each opened their own connection at module scope against the same file.
+    DuckDB's instance cache made that mostly survivable, which is precisely why
+    it was worth removing: it was coincidence, not design, and it meant three
+    modules each owned a fraction of the storage layer.
     """
-    )
+    global _con
+    if _con is None:
+        _con = duckdb.connect(str(db_path()))
+    return _con
 
-    con.execute(
-        """
-    CREATE TABLE IF NOT EXISTS company_contacts (
-      company TEXT,
-      contact_name TEXT,
-      contact_email TEXT PRIMARY KEY,
-      contact_linkedin_url TEXT,
-      title TEXT,
-      note TEXT,
-      added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-    """
-    )
 
-    con.execute(
-        """
-    CREATE INDEX IF NOT EXISTS idx_company_contacts
-    ON company_contacts(company);
-    """
-    )
+def close_con() -> None:
+    """Close and drop the cached connection. Used by tests between cases."""
+    global _con
+    if _con is not None:
+        _con.close()
+        _con = None
 
-    con.execute(
-        """
-    CREATE TABLE IF NOT EXISTS contact_profiles (
-      contact_email TEXT PRIMARY KEY,
-      linkedin_headline TEXT,
-      bio_summary TEXT,
-      recent_posts TEXT,
-      focus_areas TEXT,
-      enriched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-    """
-    )
 
-    # Ensure sequence exists
-    con.execute("CREATE SEQUENCE IF NOT EXISTS email_drafts_seq START 1;")
+def init_tables() -> List[Migration]:
+    """Bring the database up to the latest schema version. Idempotent."""
+    return apply_pending(get_con())
 
-    # Use the sequence for the default ID
-    con.execute(
-        """
-        CREATE TABLE IF NOT EXISTS email_drafts (
-          id BIGINT PRIMARY KEY DEFAULT nextval('email_drafts_seq'),
-          company TEXT,
-          contact_name TEXT,
-          contact_email TEXT,
-          draft_version INTEGER,
-          tone TEXT,
-          draft_content TEXT,
-          intent TEXT DEFAULT 'networking',
-          status TEXT DEFAULT 'pending_review',
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        """
-    )
 
-    con.execute(
-        """
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_drafts_contact_version
-    ON email_drafts(contact_email, draft_version);
-    """
-    )
-
-    con.execute(
-        """
-    CREATE TABLE IF NOT EXISTS replies_log (
-      contact_email TEXT,
-      company TEXT,
-      reply_type TEXT,
-      reply_text TEXT,
-      timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-    """
-    )
-
-    con.execute(
-        """
-    CREATE TABLE IF NOT EXISTS api_errors_log (
-      stage TEXT,
-      company TEXT,
-      contact_email TEXT,
-      error_message TEXT,
-      timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-    """
-    )
-
-    con.execute(
-        """
-    CREATE TABLE IF NOT EXISTS send_log (
-      draft_id INTEGER,
-      contact_email TEXT,
-      company TEXT,
-      sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      delivery_status TEXT
-    );
-    """
-    )
-
-    print("✅ All DuckDB tables initialized in:", DB_PATH)
+def schema_version() -> int:
+    return current_version(get_con())
 
 
 if __name__ == "__main__":
-    init_tables()
+    applied = init_tables()
+    print(
+        f"Schema at version {schema_version()} in {db_path()} "
+        f"({len(applied)} migration(s) applied)"
+    )

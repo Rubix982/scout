@@ -1,16 +1,8 @@
 # src/main.py
-from db.init import init_tables
-from src.db.insert import sync_table
-from src.constants.tables import TABLE_PROCESSED_COMPANIES, TABLE_COMPANY_RESEARCH
+"""Entry point. Delegates to the CLI so `python -m src.main` and
+`python -m src.cli` behave identically."""
 
-
-def sync_google_sheets_to_duckdb() -> None:
-    [
-        sync_table(table_name=table_name)
-        for table_name in [TABLE_PROCESSED_COMPANIES, TABLE_COMPANY_RESEARCH]
-    ]
-
+from src.cli import main
 
 if __name__ == "__main__":
-    init_tables()
-    sync_google_sheets_to_duckdb()
+    raise SystemExit(main())
