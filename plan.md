@@ -258,6 +258,7 @@ Execution order, not ID order.
 - O-004 · Sheet stays read-only (ticket opened retroactively; rule-7 break recorded)
 - D-001 · README rewritten against the shipped system — 32KB → 12KB, old design archived
 - E-012 · 80,000 Hours role feed live — 937 roles / 386 organisations; corpus 477 → 1,398
+- E-013 · `scout compass` — supplies Compass heading-check reading material; judgment deliberately not automated
 
 ## Next Orchestrator Action
 

@@ -1027,3 +1027,104 @@ is currently 0 of 386, so it buys nothing today.
 `src/db/companies.py`, `src/sources/ats/resolve.py`, `src/sources/ats/snapshot.py`,
 `src/common/models.py`, `src/cli.py`, `README.md`, `tests/test_eighty_k.py`
 **Closed:** 2026-09-10
+
+---
+
+### E-013 · `scout compass` — supply reading material for the heading-check
+
+**Status:** closed
+**Type:** implement
+**Priority:** medium
+**Created:** 2026-09-10
+**Updated:** 2026-09-10
+**Estimated:** 2h
+
+**Description:**
+The global Compass prescribes a habit: *"every few weeks, read 5–10 job
+descriptions in the target area and ask: which listed needs does my current work
+produce evidence for?"* Scout already holds that reading material — Greenhouse
+JDs run 6–13KB in `roles.raw.content`, and search across the corpus returns 443
+roles mentioning security, 90 kubernetes, 39 observability.
+
+**Scope is deliberately narrow.** The Compass says "a habit, not a system" and
+warns that building a tracking system for it is itself the difficulty-trap. So
+this command does the *mechanical* half only: find relevant roles, extract the
+needs they state, print them. It must **not**:
+
+- score alignment, or emit any percentage
+- store heading-check history or trend anything over time
+- recommend a "next brick"
+
+The judgment — which needs the current work produces evidence for — requires
+knowing that work and stays with Saif.
+
+Work:
+- `src/compass.py`: search open roles by term across title and stored JD text;
+  extract stated requirements from the JD (strip HTML, keep bullet-like lines);
+  return records for display.
+- Sample **one role per company** rather than most-recent overall, so a
+  prolific poster (wolt has 233 open roles) cannot crowd out breadth. Breadth is
+  the point of a heading-check.
+- `scout compass --area <term> [--limit N]`, default limit 8 (the Compass says
+  5–10).
+- **Print a corpus-composition banner every time.** 937 of 1,398 roles come from
+  80,000 Hours, which curates for AI safety and policy, and only 5 companies are
+  first-party. A heading-check read against that without the caveat would point
+  at 80k's editorial priorities rather than the market. `DevSecOps` and `duckdb`
+  currently return 0 roles, which reflects corpus composition, not demand — the
+  banner must make that misreading hard.
+
+**Acceptance:**
+- `scout compass --area security` prints ≤8 roles from distinct companies with
+  their stated requirements.
+- A term with no matches says so plainly rather than printing an empty section.
+- Output contains no score, percentage-alignment, or recommendation.
+- The composition banner names the dominant source and its bias.
+
+**Result:** `make compass AREA=security` prints up to 8 roles, one per
+organisation, ranked by how much each *states* about the area, with requirements
+lifted from the JD text and a corpus-composition banner first.
+
+Live output leads with affirm's "Security Risk Management Specialist II"
+(*"3+ years of experience in Information Security, Risk Management, Compliance"*,
+*"familiarity with cloud environments and common cloud security concepts"*),
+fingerprint's "Senior Engineering Manager, Security & IT", and OpenAI's
+"Software Engineer, Infrastructure Security" — real stated needs, not summaries.
+
+**Three iterations were needed to make the output honest:**
+
+1. First pass padded results with legal boilerplate. *"you have read Affirm's
+   Global Candidate Privacy Notice"* trips the "you have" requirement hint, so
+   affirm's needs came back as privacy notices and pay grades. Added a
+   boilerplate blocklist and stopped padding to `limit` — an honest "nothing
+   stated" beats filler.
+2. Second pass ranked by recency, so `--area security` returned thin 80k roles
+   where the term appeared only in a company blurb. Added relevance scoring
+   (title match, count of on-term requirement lines, tag match) so roles that
+   *say* something about the area sort first.
+3. `extract_needs()` silently degraded when handed raw HTML instead of plain
+   text: `splitlines()` saw one long line, so a single boilerplate phrase
+   anywhere in the markup discarded the whole description. Found by my own test
+   making that mistake. Normalised inside the function rather than documenting
+   the trap.
+
+**Scope held deliberately narrow**, per the Compass's own warning that building a
+tracking system for the heading-check is the difficulty-trap. A test asserts the
+output contains no alignment score, percentage-fit, or "next brick"
+recommendation, and that it says so explicitly. The judgment stays with Saif.
+
+**Bias is surfaced, not buried.** The banner prints corpus composition every run
+and adds an explicit caveat when a single source exceeds 40% — currently 67%
+from 80,000 Hours. `DevSecOps` and `duckdb` return zero roles, and without the
+caveat that reads as market signal when it is composition. A test covers the
+caveat firing.
+
+One role per organisation, because wolt alone has 233 open roles and breadth is
+what a heading-check needs.
+
+**Suite:** 255 passed (was 236).
+
+**Blockers:** —
+**Artifacts:** `src/compass.py`, `src/cli.py`, `Makefile`, `README.md`,
+`tests/test_compass.py`, `~/.agent-memory/research/scout-role-corpus.md`
+**Closed:** 2026-09-10

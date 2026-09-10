@@ -148,6 +148,7 @@ make report     # re-print the last report without re-fetching
 | `make sync` | read the sheet, resolve employer boards |
 | `make snapshot` | fetch roles, record a snapshot, diff against the previous run |
 | `make report` | print the report for the latest completed run |
+| `make compass AREA=security` | print roles in an area with their stated requirements |
 | `make tests` | pytest with coverage |
 | `make lock` | re-resolve `requirements.in` and re-pin `requirements.txt` |
 
@@ -213,6 +214,29 @@ HTTP 200 with `totalFound: 0` for companies that do not exist, so a 200 alone
 proves nothing.
 
 ---
+
+## Heading-checks
+
+```bash
+make compass AREA=security
+```
+
+Prints up to 8 roles — one per organisation, ranked by how much each actually
+*states* about the area — with the requirements pulled from their job
+descriptions, and the URL to read further.
+
+This exists to serve a habit, not to replace it: fetch 5–10 relevant job
+descriptions so the question *"which of these stated needs does my current work
+produce evidence for?"* can be asked against real text. Scout does not answer
+that question. It does not score alignment, keep heading-check history, or
+suggest what to work on next — that judgment needs to know the work being
+checked, which a corpus cannot see, and automating it would be the trap rather
+than the tool.
+
+Every run prints the corpus composition first, because absence is easy to
+misread. With 67% of roles currently coming from a board curated for AI safety
+and policy, a term returning nothing says something about the corpus, not about
+demand.
 
 ## The 80,000 Hours feed
 

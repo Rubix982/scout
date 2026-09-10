@@ -19,6 +19,7 @@ from typing import Dict, List, Optional, Sequence
 
 from src.clients import SheetAccessError
 from src.common.models import is_evergreen
+from src.compass import composition, find_roles
 from src.db import companies as company_queries
 from src.db.init import db_path, init_tables, schema_version
 from src.db.insert import SyncError, sync_companies
@@ -279,6 +280,75 @@ def cmd_report(_args) -> int:
     return 0
 
 
+# --- compass ------------------------------------------------------------------
+
+
+def _composition_banner() -> None:
+    """Always printed. A heading-check read without it would be misleading.
+
+    937 of ~1,400 roles come from 80,000 Hours, which curates for AI safety and
+    policy, and only a handful of companies are first-party. Absence of a term
+    says more about this corpus than about demand -- `duckdb` and `DevSecOps`
+    currently return zero roles, which is composition, not the market.
+    """
+    comp = composition()
+    total = sum(comp.values()) or 1
+    print("  Corpus this is read from:")
+    for platform, n in comp.items():
+        label = "80,000 Hours (curated)" if platform == FEED_SOURCE else platform
+        print(f"    {label:26} {n:5d}  ({100 * n / total:.0f}%)")
+    feed = comp.get(FEED_SOURCE, 0)
+    if feed and feed / total > 0.4:
+        print(
+            f"\n  CAVEAT: {100 * feed / total:.0f}% of this corpus is the 80,000 Hours board,\n"
+            "  which selects for AI safety, policy and biosecurity. A term missing\n"
+            "  here means it is absent from THIS corpus -- not that nobody wants it.\n"
+            "  Widen first-party coverage before reading absence as a signal."
+        )
+
+
+def cmd_compass(args) -> int:
+    init_tables()
+    term = " ".join(args.area).strip()
+    if not term:
+        print("Give an area to check, e.g. `scout compass --area security`.")
+        return 1
+
+    print(f"Heading-check: roles mentioning {term!r}")
+    _composition_banner()
+
+    roles = find_roles(term, limit=args.limit)
+    if not roles:
+        print(f"\n  No open roles match {term!r} in the current corpus.")
+        print("  That is a statement about the corpus, not about demand.")
+        return 0
+
+    print(_rule(f"{len(roles)} roles, one per organisation"))
+    for role in roles:
+        source = "80k" if role.platform == FEED_SOURCE else role.platform
+        where = role.location or "-"
+        print(f"\n  {role.company_name} — {role.title}")
+        print(f"    {where}  ·  {source}" + (f"  ·  {role.department}" if role.department else ""))
+        if role.tags:
+            print(f"    tags: {', '.join(role.tags)}")
+        if role.needs:
+            print("    states:")
+            for need in role.needs:
+                print(f"      - {need}")
+        else:
+            print("    states: (nothing specific about this area)")
+        if role.url:
+            print(f"    {role.url}")
+
+    print(_rule("Now the part Scout does not do"))
+    print("  Which of these stated needs does your current work produce evidence")
+    print("  for? Where does a need keep appearing that you have nothing on?")
+    print("  Scout deliberately does not score this -- the Compass calls the")
+    print("  heading-check a habit, not a system, and the judgment needs to know")
+    print("  your work, which a corpus does not.")
+    return 0
+
+
 # --- all ----------------------------------------------------------------------
 
 
@@ -300,6 +370,11 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("snapshot", help="fetch roles and record a snapshot")
     sub.add_parser("report", help="print the report for the latest run")
     sub.add_parser("run", help="sync, snapshot, then report")
+    compass = sub.add_parser(
+        "compass", help="print roles in an area, as reading material for a heading-check"
+    )
+    compass.add_argument("--area", nargs="+", required=True, help="e.g. --area security")
+    compass.add_argument("--limit", type=int, default=8, help="roles to show (default 8)")
     return parser
 
 
@@ -310,6 +385,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "snapshot": cmd_snapshot,
         "report": cmd_report,
         "run": cmd_run,
+        "compass": cmd_compass,
         None: cmd_run,
     }
     return handlers[args.command](args)
