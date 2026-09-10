@@ -32,6 +32,7 @@ from src.db.roles import (
 )
 from src.sources.ats.resolve import Status, resolve_all_employers
 from src.sources.ats.snapshot import run_snapshot
+from src.sources.eighty_k.feed import SOURCE as FEED_SOURCE
 
 BAR_WIDTH = 24
 
@@ -74,11 +75,18 @@ def cmd_sync(_args) -> int:
 
 def cmd_snapshot(_args) -> int:
     init_tables()
-    report = run_snapshot()
+    report = run_snapshot(include_feed=True)
     print(
         f"run {report.run_id}: {len(report.fetched)}/{len(report.outcomes)} boards "
         f"fetched, {report.roles_seen} roles seen"
     )
+    if report.feed_ok is False:
+        print("  FAILED 80,000 Hours feed (nothing closed for it)")
+    elif report.feed_ok:
+        print(
+            f"  80,000 Hours feed: {report.feed_roles} roles across "
+            f"{report.feed_companies} organisations"
+        )
     for outcome in report.failed:
         print(f"  FAILED {outcome.company_name}: {outcome.error} (nothing closed)")
     for change_type in ChangeType:
@@ -92,24 +100,36 @@ def cmd_snapshot(_args) -> int:
 
 
 def _coverage_section() -> None:
-    employers = company_queries.employers()
+    sheet_employers = company_queries.employers_from("sheet")
+    feed_employers = company_queries.employers_from(FEED_SOURCE)
     sources = company_queries.sources()
     unclassified = company_queries.unclassified()
+
     roles = open_roles()
-    real = [r for r in roles if not is_evergreen(r.title)]
+    real = [r for r in roles if not r.evergreen]
     evergreen = len(roles) - len(real)
-    with_board = len({r.company_name for r in roles})
+    feed_roles = [r for r in real if r.platform == FEED_SOURCE]
+    ats_roles = [r for r in real if r.platform != FEED_SOURCE]
+    ats_with_board = len({r.company_name for r in ats_roles})
 
     print(_rule("Coverage"))
-    print(f"  employers tracked      {len(employers):4d}")
-    print(f"    with a live board    {with_board:4d}   ({len(real)} open roles)")
-    print(f"    unresolved           {len(employers) - with_board:4d}   see below")
-    print(f"  sources excluded       {len(sources):4d}   boards, agencies, investors, communities")
+    print(f"  from the sheet         {len(sheet_employers):4d} employers")
+    print(f"    with a live board    {ats_with_board:4d}   ({len(ats_roles)} open roles)")
+    print(
+        f"    unresolved           {len(sheet_employers) - ats_with_board:4d}   see below"
+    )
+    if feed_employers:
+        print(
+            f"  from 80,000 Hours      {len(feed_employers):4d} organisations "
+            f"({len(feed_roles)} open roles)"
+        )
+    print(
+        f"  sources excluded       {len(sources):4d}   boards, agencies, investors, communities"
+    )
     print(f"  unclassified           {len(unclassified):4d}   blank Type in the sheet")
     if evergreen:
         print(
-            f"\n  {evergreen} talent-pool posting(s) set aside as not real vacancies "
-            f"(heuristic; see is_evergreen)"
+            f"\n  {evergreen} talent-pool posting(s) set aside as not real vacancies"
         )
 
 
@@ -161,7 +181,15 @@ def _changes_section(run_id: int, previous: Optional[int]) -> None:
 
 
 def _mix_section() -> None:
-    roles = [r for r in open_roles() if not is_evergreen(r.title)]
+    """Per-employer department mix, first-party ATS roles only.
+
+    Feed roles are excluded here and shown separately: their labels are
+    multi-label skill tags, not a department partition, so putting the two under
+    one heading would compare quantities that are not comparable.
+    """
+    roles = [
+        r for r in open_roles() if not r.evergreen and r.platform != FEED_SOURCE
+    ]
     if not roles:
         return
     print(_rule("What they are hiring for (share of open roles)"))
@@ -181,6 +209,33 @@ def _mix_section() -> None:
             print(f"    ... and {len(counts) - 8} more department(s)")
 
 
+def _feed_section() -> None:
+    """80,000 Hours roles, grouped by their own skill tags."""
+    roles = [
+        r for r in open_roles() if not r.evergreen and r.platform == FEED_SOURCE
+    ]
+    if not roles:
+        return
+    orgs = {r.company_name for r in roles}
+    print(_rule(f"80,000 Hours feed ({len(roles)} roles, {len(orgs)} organisations)"))
+    print("  Roles carry MULTIPLE skill tags, so these shares do not sum to 100%")
+    print("  and are not a partition -- unlike the department mix above.")
+    print("  80k curates by cause area, so this reflects its editorial focus as")
+    print("  much as the market's.")
+
+    tag_counts = Counter(tag for r in roles for tag in r.tags)
+    for name, n in tag_counts.most_common(12):
+        share = n / len(roles)
+        print(f"    {name[:34]:36} {share*100:5.1f}%  {_bar(share)}  {n:4d}")
+    untagged = sum(1 for r in roles if not r.tags)
+    if untagged:
+        print(f"    ({untagged} role(s) carry no skill tag)")
+
+    print("\n  Organisations posting most:")
+    for org, n in Counter(r.company_name for r in roles).most_common(8):
+        print(f"    {org[:40]:42} {n:4d}")
+
+
 def _unresolved_section() -> None:
     from src.db.init import get_con
 
@@ -192,7 +247,8 @@ def _unresolved_section() -> None:
         return
     print(_rule(f"Employers Scout cannot see ({len(rows)})"))
     print("  Reported as a number, not hidden -- otherwise coverage looks better")
-    print("  than it is.")
+    print("  than it is. Feed-discovered organisations are not listed here: their")
+    print("  roles arrive directly, so an absent board URL is not a gap for them.")
     for name, reason, platform in rows:
         detail = f"  [{platform}]" if platform != "-" else ""
         print(f"    {name:24} {reason}{detail}")
@@ -218,6 +274,7 @@ def cmd_report(_args) -> int:
     _coverage_section()
     _changes_section(run_id, previous)
     _mix_section()
+    _feed_section()
     _unresolved_section()
     return 0
 

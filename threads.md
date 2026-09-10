@@ -75,11 +75,11 @@ Threads
 - opened  → T-002 · refresh cadence vs. diff noise  ← now answerable, history is accumulating
             T-003 · defining competitor/peer sets
             T-004 · mechanics of "alignment"
-            T-006 · harvesting sources for companies
+- active  → T-006 · harvesting sources for companies (partly answered by E-012)
 
 ### T-006 · Should sources be harvested for companies automatically?
 
-**Status:** open
+**Status:** active
 **Parent:** —
 **Opened:** 2026-09-08
 **Question:** E-010 establishes that ~16 rows are *sources* — job boards, VCs,
@@ -89,4 +89,12 @@ foundrgroup's portfolio page, or honeypot's company list, to discover employers
 automatically. That is how the original motivation ("many companies went
 unnoticed by me") actually gets solved — but it is a distinct capability with its
 own per-source scraping burden, and it should not be smuggled into v1.
-**Answer:** —
+**Answer:** Partially, as a side effect of E-012. Ingesting 80,000 Hours as a
+role feed registered its 386 organisations in `companies` with
+`source='80000hours'` — so discovery happened, but only for the one source that
+exposes structured data, and the rows are *not* promoted to first-party
+tracking. Only 26 of 386 have a `career_page_url` that parses to an ATS board
+(R-003), so promoting them would re-enter the same 7-31% resolution ceiling. The
+open part of the question is therefore unchanged for the *other* source kinds in
+the sheet — VC portfolios, agencies, communities — each of which needs bespoke
+scraping with no equivalent index.

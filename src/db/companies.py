@@ -23,11 +23,12 @@ class Company:
     comments: str
     link: str
     board_url: str
+    source: str = "sheet"
 
 
 def _rows(where: str = "", params: tuple = ()) -> List[Company]:
     sql = (
-        "SELECT company_name, entity_type, comments, link, board_url "
+        "SELECT company_name, entity_type, comments, link, board_url, source "
         f"FROM companies {where} ORDER BY company_name"
     )
     return [Company(*r) for r in get_con().execute(sql, list(params)).fetchall()]
@@ -40,6 +41,28 @@ def all_companies() -> List[Company]:
 def employers() -> List[Company]:
     """The only rows eligible for role tracking."""
     return _rows("WHERE entity_type = ?", (EntityType.EMPLOYER.value,))
+
+
+def employers_needing_resolution() -> List[Company]:
+    """Employers whose roles must come from their own ATS board.
+
+    Excludes companies discovered from a feed, whose roles already arrive
+    directly -- attempting resolution on them would write hundreds of
+    `unresolved / no_board_url` rows and drown the report's coverage section in
+    false negatives. A feed-discovered company that later gains a `Board URL`
+    becomes eligible again, so the rule is "sheet-owned, or has a board URL"
+    rather than "sheet-owned".
+    """
+    return _rows(
+        "WHERE entity_type = ? AND (source = 'sheet' OR coalesce(board_url, '') <> '')",
+        (EntityType.EMPLOYER.value,),
+    )
+
+
+def employers_from(source: str) -> List[Company]:
+    return _rows(
+        "WHERE entity_type = ? AND source = ?", (EntityType.EMPLOYER.value, source)
+    )
 
 
 def sources() -> List[Company]:

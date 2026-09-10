@@ -20,7 +20,7 @@ from typing import Callable, List, Optional, Tuple
 
 import requests
 
-from src.db.companies import Company, employers
+from src.db.companies import Company, employers_needing_resolution
 from src.db.init import get_con
 from src.log import get_logger
 from src.sources.ats.platforms import (
@@ -164,9 +164,13 @@ def record(resolution: Resolution) -> None:
 
 
 def resolve_all_employers(fetch: Fetcher = http_fetch) -> List[Resolution]:
-    """Resolve every employer, recording resolved and unresolved alike."""
+    """Resolve every resolution-eligible employer, recording both outcomes.
+
+    Feed-discovered companies are excluded -- their roles arrive directly, so an
+    absent board URL is not a coverage gap for them.
+    """
     results: List[Resolution] = []
-    for company in employers():
+    for company in employers_needing_resolution():
         resolution = resolve_company(company, fetch=fetch)
         record(resolution)
         if resolution.status is Status.RESOLVED:

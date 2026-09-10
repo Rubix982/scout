@@ -7,6 +7,10 @@ board, pulls every open role into a local DuckDB, and diffs it run over run — 
 new, closed and reopened roles surface on their own instead of you re-reading a
 spreadsheet that quietly went stale.
 
+It also ingests the [80,000 Hours job board](https://jobs.80000hours.org/) as a
+curated feed — ~937 roles across ~386 organisations, weighted toward AI safety,
+policy and biosecurity.
+
 It also tells you what it *cannot* see, which matters more than it sounds.
 
 ---
@@ -19,13 +23,14 @@ Scout report -- run 4 (2026-09-08 15:54:45)
 
 Coverage
 --------
-  employers tracked        13
-    with a live board       5   (471 open roles)
+  from the sheet           13 employers
+    with a live board       5   (460 open roles)
     unresolved              8   see below
+  from 80,000 Hours       386 organisations (907 open roles)
   sources excluded         13   boards, agencies, investors, communities
   unclassified             10   blank Type in the sheet
 
-  1 talent-pool posting(s) set aside as not real vacancies
+  31 talent-pool posting(s) set aside as not real vacancies
 
 Since run 3
 -----------
@@ -54,6 +59,19 @@ What they are hiring for (share of open roles)
     Order Fulfillment                     21.5%  #####...................    52
     Merchant acquisition SMB              11.2%  ###.....................    27
     Country Support                        7.4%  ##......................    18
+
+80,000 Hours feed (907 roles, 367 organisations)
+------------------------------------------------
+  Roles carry MULTIPLE skill tags, so these shares do not sum to 100%
+  and are not a partition -- unlike the department mix above.
+    Research                              41.3%  ##########..............   375
+    Software engineering                  25.7%  ######..................   233
+    Operations                            19.2%  #####...................   174
+    Information security                  17.6%  ####....................   160
+
+  Organisations posting most:
+    Anthropic                                    39
+    OpenAI                                       27
 
 Employers Scout cannot see (8)
 ------------------------------
@@ -196,6 +214,43 @@ proves nothing.
 
 ---
 
+## The 80,000 Hours feed
+
+A second source, and a different shape. Where an ATS board must be *resolved*
+per employer, this one arrives whole: 937 roles across 386 organisations from a
+single request against the board's public Algolia index (search-only credentials,
+published in the board's own page source; `robots.txt` is fully permissive).
+
+That matters because it sidesteps the constraint everything else here runs into.
+Board-token resolution tops out around 31%; the feed needs none, and roughly
+triples the corpus.
+
+Three things are modelled deliberately:
+
+- **Provenance is kept.** Feed roles are stored under `platform="80000hours"`, so
+  they can never collide with a first-party ATS role and the report can attribute
+  them. 80k *curates* — 605 of 937 roles are tagged "AI safety & policy" — so its
+  distribution reflects its editorial focus as much as the market's. Pooling it
+  with first-party data would hide that.
+- **Tags are not departments.** 80k labels roles with `tags_skill` (Research,
+  Software engineering, Information security, …), which covers 100% of roles and
+  is cleaner than ATS departments. But 53% of roles carry *more than one* tag,
+  while a department partitions. They get their own `tags` column and their own
+  report section, labelled as non-partitioning, rather than being coerced into
+  `department`.
+- **Its evergreen flag is authoritative.** 80k marks talent-pool postings itself
+  (30 of 937). Where a source states it, Scout believes it and does not guess
+  from the title.
+
+Discovered organisations are written with `source = '80000hours'`, which keeps
+them out of two things they do not belong in: the sheet's delta sync, which
+deletes rows absent from the sheet, and ATS resolution, since their roles already
+arrive and an absent board URL is not a coverage gap for them.
+
+A failed feed request closes nothing — the same guardrail the ATS path uses. A
+*successful* fetch that omits a role does close it, because the whole feed is
+fetched at once and absence is then real information.
+
 ## How diffing works
 
 Roles are keyed on `(platform, token, external_id)` — the ATS's own id, **never
@@ -229,9 +284,9 @@ Everything lands in `~/.scout/scout.db` (DuckDB), outside the repo. Override wit
 
 | Table | |
 | :-- | :-- |
-| `companies` | the sheet, synced by delta: name, comments, link, `entity_type`, `board_url` |
+| `companies` | name, comments, link, `entity_type`, `board_url`, `source` (`sheet` or a feed) |
 | `company_ats` | resolved platform/token per employer, with status and reason |
-| `roles` | one row per role, with `first_seen` / `last_seen` / `closed_at` and the raw payload |
+| `roles` | one row per role, with `first_seen` / `last_seen` / `closed_at`, `tags`, and the raw payload |
 | `role_changes` | append-only audit trail: appeared / changed / closed / reopened |
 | `runs` | one row per snapshot, including how many boards failed |
 | `schema_version` | applied migrations |
@@ -289,9 +344,11 @@ Nothing here is committed to the database or the sheet; it is all plain markdown
 
 ## Status
 
-v1 works end to end. Current coverage: **5 of 13 employers have a board URL**, so
-Scout sees 477 roles across 5 companies. Raising that is data entry, not
-engineering — add `Board URL` values to the sheet.
+v1 works end to end, over two sources: **1,398 open roles** — 460 from 5
+first-party ATS boards, 937 from the 80,000 Hours feed.
+
+Sheet coverage is **5 of 13 employers** with a board URL. Raising that is data
+entry, not engineering — add `Board URL` values to the sheet.
 
 Deferred and tracked: automatic token resolution as an assist (`E-004`), refresh
 cadence versus diff noise (`T-002`), competitor/peer set definition (`T-003`),

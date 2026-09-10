@@ -139,6 +139,55 @@ entity kinds; make user-supplied board URLs the primary resolution path. See
 - **9 Deliverable** — the report must state the excluded-source count and the
   unresolved-employer count with reasons, so coverage is never overstated.
 
+## Design pass — 80,000 Hours as a role feed (2026-09-10, R-003)
+
+Saif's reason for wanting this board is that its jobs are ones he actually wants.
+That inverts my initial framing: I filed 80k's curation under *cost* ("a filtered
+view, not a neutral census"). For a personal instrument the filter is the
+feature — a set weighted toward work he cares about beats a complete one. Lens 1
+re-passed accordingly.
+
+**Chosen shape: role feed, not company discovery.** Both were live after R-003.
+Company discovery would add ~19 trackable employers and remain governed by the
+same 7–31% resolution ceiling R-002 measured. The role feed needs **no token
+resolution at all** — the 937 roles are already in the index — taking Scout from
+477 roles / 5 companies to ~1,400 / ~390. It sidesteps the single constraint that
+has capped this project since R-002. Company discovery (T-006) stays deferred.
+
+**Lens 5b, construct validity — the one real problem.** `tags_skill` covers
+936/937 roles with 13 clean values (Research 397, Software engineering 236,
+Operations 186, Policy 179, Information security 161), which is a *better*
+grouping than ATS `departments[]`. The temptation is to map it onto `department`
+and reuse the existing mix section. **That would be wrong:** 53% of roles carry
+more than one skill tag. ATS department mix is a *partition* — one department per
+role, shares sum to 1. Skill tags are *multi-label* — shares do not sum to 1 and
+taking `tags_skill[0]` would be arbitrary for half the corpus.
+
+Resolution: do not coerce tags into `department`. Store them, and label
+source-fed groupings explicitly as non-partitioning. Comparing a partition to a
+multi-label distribution under one heading is exactly the "measuring the wrong
+thing precisely" failure.
+
+**Lens 6, confounds.** 80k curates toward AI safety & policy (605 of 937 roles),
+so its skill distribution describes *80k's editorial focus* as much as the
+market's. Any cross-company comparison drawn from source-fed roles inherits that
+bias. The report must attribute roles to their source so the bias is visible
+rather than baked in.
+
+**Lens 4, falsification.** Fails if source-fed roles cannot be distinguished from
+first-party ATS roles in storage or in the report — at which point provenance is
+lost and every aggregate silently mixes a census with a curated slice.
+
+**Deferred, with reasons.** Cross-source deduplication: a company tracked both
+via its own ATS and via 80k yields two rows with different identities. Overlap is
+currently **zero of 386**, so this buys nothing today; documented, not built.
+`backend.eawork.org/api` left unexplored — the Algolia index already answers the
+question.
+
+**Deliverable.** `make report` shows source-fed roles attributed to 80,000 Hours,
+with their skill-tag distribution labelled as non-partitioning, without
+disturbing the existing per-employer department mix.
+
 ## Current Phase
 
 Phase 1 — **Infrastructure coherence** — **COMPLETE** (5/5 closed). No connector work begins until ingestion,
@@ -178,7 +227,7 @@ Execution order, not ID order.
 | ID    | Blocked By                                        |
 | ----- | ------------------------------------------------- |
 | E-002 | — (unblocked; Sheets access now verified working) |
-| —     | v1 complete; nothing blocked                       |
+| —     | nothing blocked                                    |
 | E-011 | E-010                                             |
 | E-003 | E-011                                             |
 | E-004 | E-011 (deferred to Phase 3 — assist only)         |
@@ -208,6 +257,7 @@ Execution order, not ID order.
 - R-003 · 80,000 Hours assessed — no API at the cited URLs, but a public Algolia index with 937 jobs / 386 companies
 - O-004 · Sheet stays read-only (ticket opened retroactively; rule-7 break recorded)
 - D-001 · README rewritten against the shipped system — 32KB → 12KB, old design archived
+- E-012 · 80,000 Hours role feed live — 937 roles / 386 organisations; corpus 477 → 1,398
 
 ## Next Orchestrator Action
 
@@ -223,10 +273,8 @@ Two things now compete for next:
    engineering work — `ada engage` is confirmed on Greenhouse and most valuable.
 2. ~~**The README.**~~ Done — D-001. Rewritten against the shipped system;
    the outreach design is archived at `docs/outreach-design-archive.md`.
-3. **80,000 Hours as a source.** R-003 found no API at the cited URLs but a
-   public Algolia index behind the job board: 937 jobs, 386 companies, zero
-   overlap with the sheet. Awaiting a decision on integration shape — role feed
-   vs. company discovery — before any implement ticket opens.
+3. ~~**80,000 Hours as a source.**~~ Done — E-012. Shipped as a role feed;
+   937 roles across 386 organisations, no token resolution needed.
 
 Deferred by design: E-004 (automatic resolution, Phase 3), T-002 (refresh
 cadence — now answerable as history accumulates), T-003, T-004, T-006.

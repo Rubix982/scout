@@ -244,6 +244,8 @@ def test_run_records_attempt_and_failure_counts(db):
         "SELECT companies_attempted, companies_fetched, companies_failed, roles_seen "
         "FROM runs WHERE run_id = ?", [report.run_id]
     ).fetchone()
+    # No feed in this run (include_feed defaults False), so the counts are the
+    # two boards only.
     assert row == (2, 0, 2, 0)
 
 

@@ -30,6 +30,8 @@ from src.log import get_logger
 from src.sources.ats.platforms import Platform
 from src.sources.ats.resolve import Fetcher, http_fetch
 from src.sources.ats.roles import endpoint_for, parse_roles
+from src.sources.eighty_k.feed import SOURCE as FEED_SOURCE
+from src.sources.eighty_k.feed import PageFetcher, http_page_fetcher, run_feed_snapshot
 
 logger = get_logger("ats.snapshot")
 
@@ -50,6 +52,12 @@ class RunReport:
     run_id: int
     previous_run_id: Optional[int]
     outcomes: List[CompanyOutcome] = field(default_factory=list)
+    #: Feed results are tracked separately: a feed is fetched whole, so it is
+    #: one success/failure rather than one per company.
+    feed_ok: Optional[bool] = None
+    feed_companies: int = 0
+    feed_roles: int = 0
+    feed_changes: List[RoleChange] = field(default_factory=list)
 
     @property
     def fetched(self) -> List[CompanyOutcome]:
@@ -61,11 +69,11 @@ class RunReport:
 
     @property
     def roles_seen(self) -> int:
-        return sum(o.role_count for o in self.fetched)
+        return sum(o.role_count for o in self.fetched) + self.feed_roles
 
     @property
     def changes(self) -> List[RoleChange]:
-        return [c for o in self.outcomes for c in o.changes]
+        return [c for o in self.outcomes for c in o.changes] + list(self.feed_changes)
 
     def of_type(self, change_type: ChangeType) -> List[RoleChange]:
         return [c for c in self.changes if c.change_type is change_type]
@@ -84,7 +92,21 @@ def resolved_boards() -> List[tuple]:
     ).fetchall()
 
 
-def run_snapshot(fetch: Fetcher = http_fetch, *, include_content: bool = True) -> RunReport:
+def run_snapshot(
+    fetch: Fetcher = http_fetch,
+    *,
+    include_content: bool = True,
+    include_feed: bool = False,
+    feed_fetch: Optional[PageFetcher] = None,
+) -> RunReport:
+    """Snapshot every resolved board, and optionally the 80,000 Hours feed.
+
+    `include_feed` defaults **False** so that calling this function never makes
+    an unrequested network round-trip. It defaulted True briefly and the test
+    suite silently began hitting the live Algolia index -- 937 real roles into a
+    temp database, and 77s of runtime. The decision to reach the network belongs
+    at the CLI edge, not in a library default.
+    """
     run_id = start_run()
     report = RunReport(run_id=run_id, previous_run_id=previous_completed_run(run_id))
 
@@ -120,11 +142,32 @@ def run_snapshot(fetch: Fetcher = http_fetch, *, include_content: bool = True) -
             )
         )
 
+    if include_feed:
+        ok, feed_changes, n_companies = run_feed_snapshot(
+            run_id, feed_fetch or http_page_fetcher
+        )
+        report.feed_ok = ok
+        report.feed_changes = feed_changes
+        report.feed_companies = n_companies
+        if ok:
+            report.feed_roles = open_role_count_for_platform(FEED_SOURCE)
+
     finish_run(
         run_id,
-        attempted=len(report.outcomes),
-        fetched=len(report.fetched),
-        failed=len(report.failed),
+        attempted=len(report.outcomes) + (1 if include_feed else 0),
+        fetched=len(report.fetched) + (1 if report.feed_ok else 0),
+        failed=len(report.failed) + (1 if report.feed_ok is False else 0),
         roles_seen=report.roles_seen,
     )
     return report
+
+
+def open_role_count_for_platform(platform: str) -> int:
+    return int(
+        get_con()
+        .execute(
+            "SELECT count(*) FROM roles WHERE platform = ? AND closed_at IS NULL",
+            [platform],
+        )
+        .fetchone()[0]
+    )
