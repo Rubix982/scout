@@ -31,6 +31,10 @@ class SheetTable:
     table: str
     primary_key: str
     columns: Mapping[str, str]  # sheet header -> db column
+    #: Extra WHERE clause restricting which existing rows this sync owns. Rows
+    #: outside it are neither compared nor deleted -- without this, companies
+    #: discovered from a feed would be deleted as "absent from the sheet".
+    owns: str = ""
     # db column -> validator. Applied after `normalize`; raising ValueError
     # fails the sync with the offending row named, rather than coercing a bad
     # value into something plausible.
@@ -56,6 +60,7 @@ class SheetTable:
 COMPANIES = SheetTable(
     table="companies",
     primary_key="company_name",
+    owns="source = 'sheet'",
     columns={
         "Company Name": "company_name",
         "Comments": "comments",
@@ -109,8 +114,11 @@ class SyncPlan:
 
 
 def fetch_existing(spec: SheetTable) -> Dict[str, Dict[str, str]]:
+    """Existing rows this spec owns. Rows outside `spec.owns` are invisible here,
+    so they are never compared and never deleted."""
     cols = ", ".join(spec.db_columns)
-    rows = get_con().execute(f"SELECT {cols} FROM {spec.table}").fetchall()
+    where = f" WHERE {spec.owns}" if spec.owns else ""
+    rows = get_con().execute(f"SELECT {cols} FROM {spec.table}{where}").fetchall()
     out: Dict[str, Dict[str, str]] = {}
     for row in rows:
         record = {col: normalize(val) for col, val in zip(spec.db_columns, row)}
@@ -163,9 +171,10 @@ def apply_plan(spec: SheetTable, plan: SyncPlan) -> None:
 
     for record in plan.to_insert + plan.to_update:
         con.execute(upsert, [record[c] for c in spec.db_columns])
+    guard = f" AND {spec.owns}" if spec.owns else ""
     for key in plan.to_delete:
         con.execute(
-            f"DELETE FROM {spec.table} WHERE {spec.primary_key} = ?", [key]
+            f"DELETE FROM {spec.table} WHERE {spec.primary_key} = ?{guard}", [key]
         )
 
 

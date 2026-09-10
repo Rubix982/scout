@@ -184,3 +184,92 @@ that resolution can be automatic. Manual token entry for ~20 employers is a
 one-time task of minutes and yields near-total coverage of what actually
 matters — auto-resolution belongs as an assist for when the list grows, not as
 the mechanism the design depends on.
+
+---
+
+## [R-003] Finding: 80,000 Hours has no API, but its job board has a rich public search index
+
+_Date: 2026-09-10_
+
+### The two cited URLs are dead ends
+
+Both are catalog entries, not APIs. Confidence: high — both state it outright.
+
+- `apis.io/providers/80-000-hours/` lists **0 APIs** and says 80,000 Hours "is a
+  content and career-advice organization rather than an API producer; no public
+  developer API is published."
+- `github.com/api-evangelist/80-000-hours` is a third-party API Evangelist
+  profile holding `apis.yml` / `provenance.yml` metadata. It states "This
+  repository contains no software" and calls itself "a lead awaiting the
+  enrichment pipeline." No OpenAPI spec, no endpoints.
+
+### The board itself is a different story
+
+`jobs.80000hours.org` is a Nuxt app backed by an **Algolia** index, with
+search-only credentials in the page source (public by construction for
+InstantSearch — not a leaked secret). Also present: `apiBase:
+https://backend.eawork.org/api` (the eawork backend, unexplored).
+
+```
+app id   W6KM1UDIB3
+key      d1d7f2c8696e7b36837d5ed337c4a319   (search-only, from page source)
+indices  jobs_prod, companies_prod, tags_prod,
+         jobs_prod_strict, jobs_prod_super_ranked,
+         jobs_prod_closing_date, collections_prod
+POST     https://W6KM1UDIB3-dsn.algolia.net/1/indexes/{index}/query
+```
+
+`robots.txt` is `User-agent: * / Disallow:` — nothing disallowed.
+
+### Measured contents
+
+| | |
+| :-- | --: |
+| `jobs_prod` | **937 jobs** |
+| distinct companies in those jobs | **386** |
+| `companies_prod` (curated/highlighted orgs only) | 54 |
+| `tags_prod` | 1001 |
+| jobs flagged `evergreen` by 80k | 30 |
+| jobs flagged `repost` by 80k | 58 |
+
+Per-job fields are richer than any ATS we read: `post_pk`/`objectID`, `title`,
+`url_external`, `posted_at`, `created_at`, `updated_at`, `closes_at`, `salary`
+(+`salary_limit`), `company_name`, `company_id`, `company_url`,
+`company_career_page_url`, and tag arrays — `tags_area` ("AI safety & policy"),
+`tags_skill`, `tags_country`, `tags_city`, `tags_role_type`,
+`tags_exp_required`, `tags_degree_required`.
+
+**`evergreen` and `repost` are authoritative flags.** E-006 currently infers
+evergreen from title text; for these roles 80k states it. Their own data also
+confirms the phenomenon is real and worth modelling (30 of 937).
+
+### Zero overlap with the current sheet
+
+386 companies in the index; 36 rows in the sheet; **overlap: none.** Every one is
+a company Scout does not currently know about. Confidence: high (exact string
+comparison, so near-misses on naming may exist, but no exact matches at all is
+decisive enough).
+
+### ATS resolution is still the bottleneck — the same wall as R-002
+
+`company_career_page_url` parses to a recognisable ATS board for only
+**26 of 386 companies (7%)**, of which **19 are on v1-supported platforms**
+(ashby 9, greenhouse 7, lever 3). Non-v1: workday 4, jazzhr 2, recruitee 1.
+
+So harvesting 80k for *companies to track via their own ATS* would add ~19
+trackable employers — better than the current 5, but still governed by the same
+7-31% resolution ceiling R-002 measured.
+
+### The consequence that matters
+
+**The roles are already in the index.** Ingesting 80k as a *role feed* needs no
+board-token resolution at all: 937 roles arrive with title, company, dates,
+tags, salary and URL. That sidesteps the single constraint that has capped this
+project since R-002, and would take Scout from 477 roles / 5 companies to
+~1400 roles / ~390 companies.
+
+The cost is provenance: an aggregator-sourced role is second-hand. 80k curates,
+so its set is a *filtered* view (heavily AI-safety / policy weighted), not the
+neutral census an employer's own board gives. Duplicates become possible where a
+company is tracked both ways. Neither is disqualifying, but both need modelling
+rather than assuming.

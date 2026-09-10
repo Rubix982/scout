@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Optional, Tuple
+from typing import Optional, Sequence, Tuple
 
 # Evergreen / talent-pool postings: real board entries that are not real
 # vacancies. Checkly's board leads with "Don't see the role you're looking for?
@@ -52,6 +52,12 @@ class Role:
     first_published: Optional[str]
     updated_at: Optional[str]
     raw: str
+    #: A source's own labels (e.g. 80k's `tags_skill`). Multi-label, so NOT
+    #: written to `department` -- see migration 006.
+    tags: Tuple[str, ...] = ()
+    #: Set when the source states it authoritatively. None means "unknown",
+    #: and `is_evergreen` then falls back to the title heuristic.
+    evergreen_flag: Optional[bool] = None
 
     @property
     def identity(self) -> Tuple[str, str, str]:
@@ -64,5 +70,11 @@ class Role:
 
     @property
     def is_evergreen(self) -> bool:
-        """See `is_evergreen` -- a talent-pool posting, not a real vacancy."""
+        """Whether this is a talent-pool posting rather than a real vacancy.
+
+        Prefers the source's own flag when it has one -- 80,000 Hours states it
+        per role -- and only guesses from the title otherwise.
+        """
+        if self.evergreen_flag is not None:
+            return self.evergreen_flag
         return is_evergreen(self.title)

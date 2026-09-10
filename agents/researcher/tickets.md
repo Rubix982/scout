@@ -67,3 +67,56 @@ run career pages with no ATS signature at all).
 **Artifacts:** `agents/shared/findings.md` → "[R-002] ATS-only resolution
 measures 19%", `agents/researcher/findings/sweep.py`, `sweep_results.json`
 **Closed:** 2026-09-08
+
+---
+
+### R-003 · Assess 80,000 Hours as a data source
+
+**Status:** closed
+**Type:** research
+**Priority:** medium
+**Created:** 2026-09-10
+**Updated:** 2026-09-10
+**Estimated:** 1h
+
+**Description:**
+Saif asked to add the 80,000 Hours job board as a data source, citing
+`https://apis.io/providers/80-000-hours/` and
+`https://github.com/api-evangelist/80-000-hours`.
+
+**Both cited URLs are catalog entries, not APIs.** apis.io lists **0 APIs** for
+the provider and states 80,000 Hours "is a content and career-advice
+organization rather than an API producer; no public developer API is published".
+The GitHub repo is an API Evangelist third-party profile that explicitly says
+"This repository contains no software" and describes itself as "a lead awaiting
+the enrichment pipeline" — it holds `apis.yml` / `provenance.yml` metadata, no
+OpenAPI spec, no endpoints.
+
+So the task cannot proceed as literally specified. Determine instead whether
+`https://jobs.80000hours.org/` exposes any usable machine-readable surface
+(JSON endpoint, search index, feed), and what entity kind it is under E-010.
+
+**Note on taxonomy:** 80,000 Hours runs a *job board*, which in E-010 terms is a
+**source** (`board`), not an `employer`. Its postings belong to other companies.
+R-002 already showed why this matters: counting a board's or agency's postings as
+its own corrupts role-mix claims (`OnHires` contributed 47 client roles,
+Greenhouse-the-vendor its own 18). So this is T-006 territory — harvesting a
+source to *discover employers* — not a new employer adapter, and T-006 was
+explicitly deferred out of v1.
+
+**Acceptance:** a findings entry stating whether a machine-readable surface
+exists, what it returns, and which of the two integration shapes (role feed vs.
+company discovery) the data actually supports. Confidence level required.
+
+**Result:** no API at either cited URL, but the board runs on a public Algolia
+index: **937 jobs across 386 companies**, zero overlap with the current sheet,
+`robots.txt` fully permissive. Authoritative `evergreen`/`repost` flags. ATS
+resolution from `company_career_page_url` is only 26/386 (7%), 19 on v1
+platforms — the same wall R-002 hit. But the roles are already in the index, so
+a *role feed* needs no resolution at all.
+
+**Blockers:** —
+**Artifacts:** `agents/shared/findings.md` → "[R-003] 80,000 Hours has no API,
+but its job board has a rich public search index";
+`agents/researcher/findings/eighty_k_probe.py`
+**Closed:** 2026-09-10

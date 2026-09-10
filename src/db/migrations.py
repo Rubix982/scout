@@ -271,12 +271,34 @@ _ROLES_AND_RUNS = (
     "CREATE INDEX IF NOT EXISTS idx_role_changes_run ON role_changes(run_id);",
 )
 
+# --- 006: multi-source support (E-012) ----------------------------------------
+# `companies.source` is a CORRECTNESS requirement, not bookkeeping. The sheet
+# delta sync deletes any `companies` row absent from the incoming sheet, so a
+# company discovered from a feed would be silently destroyed on the next
+# `make sync`. The sync now scopes its delete to `source = 'sheet'`.
+#
+# `roles.tags` holds a source's own labels. They are deliberately NOT written to
+# `department`: ATS departments partition (one per role, shares sum to 1) while
+# skill tags are multi-label (53% of 80k roles carry more than one). Coercing
+# them would make the two incomparable under one heading.
+#
+# `roles.is_evergreen` is nullable on purpose: NULL means "unknown, fall back to
+# the title heuristic", true/false means the source stated it. 80,000 Hours
+# flags 30 of 937 roles evergreen authoritatively.
+_MULTI_SOURCE = (
+    "ALTER TABLE companies ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'sheet';",
+    "ALTER TABLE roles ADD COLUMN IF NOT EXISTS tags TEXT;",
+    "ALTER TABLE roles ADD COLUMN IF NOT EXISTS is_evergreen BOOLEAN;",
+    "CREATE INDEX IF NOT EXISTS idx_companies_source ON companies(source);",
+)
+
 MIGRATIONS: Tuple[Migration, ...] = (
     Migration(version=1, name="baseline", statements=_BASELINE),
     Migration(version=2, name="companies", statements=_COMPANIES),
     Migration(version=3, name="entity_type", statements=_ENTITY_TYPE),
     Migration(version=4, name="board_url_and_ats", statements=_BOARD_URL_AND_ATS),
     Migration(version=5, name="roles_and_runs", statements=_ROLES_AND_RUNS),
+    Migration(version=6, name="multi_source", statements=_MULTI_SOURCE),
 )
 
 

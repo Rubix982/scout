@@ -878,3 +878,253 @@ reason unrelated to what they check. Rewritten to derive from
 `src/db/companies.py`, `src/main.py`, `tests/test_ats_platforms.py`,
 `tests/test_ats_resolve.py`, `tests/test_sync.py`
 **Closed:** 2026-09-08
+
+---
+
+### E-012 · 80,000 Hours role feed
+
+**Status:** closed
+**Type:** implement
+**Priority:** high
+**Created:** 2026-09-10
+**Updated:** 2026-09-10
+**Estimated:** 5h
+
+**Description:**
+Ingest the 80,000 Hours job board as a **role feed** — roles arrive directly, no
+board-token resolution. See R-003 in `agents/shared/findings.md` for the measured
+surface and `plan.md` → "Design pass — 80,000 Hours as a role feed".
+
+Endpoint (public search-only credentials, from the board's page source):
+
+```
+POST https://W6KM1UDIB3-dsn.algolia.net/1/indexes/jobs_prod/query
+headers  X-Algolia-Application-Id: W6KM1UDIB3
+         X-Algolia-API-Key: d1d7f2c8696e7b36837d5ed337c4a319
+body     {"params": "query=&hitsPerPage=1000&page=N"}
+```
+
+937 jobs, one page at `hitsPerPage=1000`; paginate on `nbPages` regardless.
+`robots.txt` is fully permissive. Treat the key as public config, not a secret —
+it belongs in code or config, not `secrets/`.
+
+**Identity.** Reuse the existing `roles` primary key with
+`platform="80000hours"`, `token=company_id`, `external_id=post_pk`. No change to
+the identity scheme, and it keeps source-fed roles from ever colliding with
+first-party ATS roles.
+
+**Migration 006** — three additions:
+- `companies.source TEXT DEFAULT 'sheet'`. **Required for correctness:**
+  `compute_plan()` deletes any `companies` row absent from the incoming sheet, so
+  a discovered company inserted without this would be silently deleted on the
+  next `make sync`. Scope the sheet sync's delete to `source = 'sheet'`.
+- `roles.tags TEXT` — JSON array of skill tags. Do **not** map these onto
+  `department`; see the construct-validity note in the design pass.
+- `roles.is_evergreen BOOLEAN` — nullable. NULL means "unknown, fall back to the
+  title heuristic"; true/false means the source stated it. 80k flags 30 of 937
+  `evergreen` and 58 `repost`, authoritatively.
+
+**Field mapping** (read off live records):
+
+| Role field | 80k field |
+| :-- | :-- |
+| `external_id` | `post_pk` |
+| `title` | `title` |
+| `location` | `card_locations` joined, else `tags_city` |
+| `department` | **leave empty** — tags are not departments |
+| `url` | `url_external` |
+| `first_published` | `posted_at` (epoch seconds) |
+| `updated_at` | `updated_at` (epoch seconds) |
+| `tags` | `tags_skill` |
+| `is_evergreen` | `evergreen` |
+
+**Source-level closing.** The whole source is fetched in one request, so absence
+is real information. After processing every company present in the response,
+close roles for companies that previously had open `80000hours` roles and are
+absent now — call the existing per-company snapshot with an empty list. The
+"failed fetch closes nothing" guardrail still applies: if the Algolia request
+fails, close nothing at all.
+
+**Company rows.** Insert discovered companies with `entity_type='employer'`,
+`source='80000hours'`, so the report's coverage counts stay coherent. They must
+never be resolved against ATS boards — they have no `board_url` and their roles
+already arrive.
+
+**Report.** Source-fed roles appear attributed to 80,000 Hours, with the
+skill-tag distribution labelled as non-partitioning ("roles carry multiple tags,
+so these do not sum to 100%"). Do not disturb the existing per-employer
+department mix.
+
+**Acceptance:**
+- A first run ingests ~937 roles across ~386 companies; a second identical run
+  reports 0 changes.
+- `make sync` after ingestion does **not** delete the discovered companies.
+- A simulated Algolia failure closes nothing.
+- A role removed from the feed is closed; restored, it reopens.
+- 80k's `evergreen` flag overrides the title heuristic for its roles.
+- The report distinguishes source-fed roles from first-party ATS roles.
+
+**Result — live:**
+
+```
+run 7: 5/5 boards fetched, 1398 roles seen
+  80,000 Hours feed: 937 roles across 386 organisations
+
+from the sheet           13 employers
+  with a live board       5   (460 open roles)
+from 80,000 Hours       386 organisations (907 open roles)
+```
+
+937 roles, 386 organisations, **zero overlap** with the sheet. Second run
+converges to 0 changes. Corpus roughly tripled — 477 → 1,398 roles — with no
+token resolution involved.
+
+The feed section reports what Saif actually wanted from this board:
+Research 375, Software engineering 233, Operations 174, **Information security
+160**; Anthropic 39 and OpenAI 27 posting most.
+
+**Two correctness problems caught before they mattered:**
+
+1. *The sheet sync would have deleted every discovered company.*
+   `compute_plan()` deletes any `companies` row absent from the incoming sheet,
+   so 386 rows would have vanished on the next `make sync`. Fixed with
+   `companies.source` plus a `SheetTable.owns` clause scoping both the
+   comparison and the delete. Two tests: discovered companies survive a sync,
+   and the sync still deletes its *own* removed rows (an ownership guard that
+   makes the sync inert is worse than the bug).
+2. *Feed organisations were being run through ATS resolution* — 399 employers
+   attempted, writing 386 `unresolved / no_board_url` rows that would have
+   drowned the coverage report in false negatives. Resolution is now scoped to
+   "sheet-owned **or** has a board URL", so a discovered company that later
+   gains a `Board URL` becomes eligible rather than being permanently excluded.
+
+**Regression I introduced and fixed:** `include_feed` briefly defaulted `True`,
+and the test suite silently began hitting the live Algolia index — 937 real roles
+into a temp database and **77s** of runtime. The default is now `False` and the
+CLI opts in explicitly; reaching the network belongs at the edge, not in a
+library default. A tripwire test replaces both real fetchers and asserts
+`run_snapshot()` calls neither. Suite back to **6s**.
+
+**Construct validity honoured, not worked around:** `tags_skill` covers 936/937
+roles with 13 clean values — better than ATS departments — but 53% of roles carry
+more than one, so it is multi-label where a department partitions. Tags went to
+their own column and their own report section labelled non-partitioning, rather
+than being coerced into `department` where the two would have looked comparable
+and not been.
+
+80k's `evergreen` flag now overrides the title heuristic for its roles (30 of
+937, exactly matching their own count). Total set-aside rose 1 → 31.
+
+**Deferred, documented:** cross-source deduplication. A company tracked both via
+its own ATS and via the feed yields two rows with different identities; overlap
+is currently 0 of 386, so it buys nothing today.
+
+**Suite:** 236 passed (was 211).
+
+**Blockers:** —
+**Artifacts:** `src/sources/eighty_k/feed.py`, `src/sources/eighty_k/__init__.py`,
+`src/db/migrations.py` (006), `src/db/insert.py`, `src/db/roles.py`,
+`src/db/companies.py`, `src/sources/ats/resolve.py`, `src/sources/ats/snapshot.py`,
+`src/common/models.py`, `src/cli.py`, `README.md`, `tests/test_eighty_k.py`
+**Closed:** 2026-09-10
+
+---
+
+### E-013 · `scout compass` — supply reading material for the heading-check
+
+**Status:** closed
+**Type:** implement
+**Priority:** medium
+**Created:** 2026-09-10
+**Updated:** 2026-09-10
+**Estimated:** 2h
+
+**Description:**
+The global Compass prescribes a habit: *"every few weeks, read 5–10 job
+descriptions in the target area and ask: which listed needs does my current work
+produce evidence for?"* Scout already holds that reading material — Greenhouse
+JDs run 6–13KB in `roles.raw.content`, and search across the corpus returns 443
+roles mentioning security, 90 kubernetes, 39 observability.
+
+**Scope is deliberately narrow.** The Compass says "a habit, not a system" and
+warns that building a tracking system for it is itself the difficulty-trap. So
+this command does the *mechanical* half only: find relevant roles, extract the
+needs they state, print them. It must **not**:
+
+- score alignment, or emit any percentage
+- store heading-check history or trend anything over time
+- recommend a "next brick"
+
+The judgment — which needs the current work produces evidence for — requires
+knowing that work and stays with Saif.
+
+Work:
+- `src/compass.py`: search open roles by term across title and stored JD text;
+  extract stated requirements from the JD (strip HTML, keep bullet-like lines);
+  return records for display.
+- Sample **one role per company** rather than most-recent overall, so a
+  prolific poster (wolt has 233 open roles) cannot crowd out breadth. Breadth is
+  the point of a heading-check.
+- `scout compass --area <term> [--limit N]`, default limit 8 (the Compass says
+  5–10).
+- **Print a corpus-composition banner every time.** 937 of 1,398 roles come from
+  80,000 Hours, which curates for AI safety and policy, and only 5 companies are
+  first-party. A heading-check read against that without the caveat would point
+  at 80k's editorial priorities rather than the market. `DevSecOps` and `duckdb`
+  currently return 0 roles, which reflects corpus composition, not demand — the
+  banner must make that misreading hard.
+
+**Acceptance:**
+- `scout compass --area security` prints ≤8 roles from distinct companies with
+  their stated requirements.
+- A term with no matches says so plainly rather than printing an empty section.
+- Output contains no score, percentage-alignment, or recommendation.
+- The composition banner names the dominant source and its bias.
+
+**Result:** `make compass AREA=security` prints up to 8 roles, one per
+organisation, ranked by how much each *states* about the area, with requirements
+lifted from the JD text and a corpus-composition banner first.
+
+Live output leads with affirm's "Security Risk Management Specialist II"
+(*"3+ years of experience in Information Security, Risk Management, Compliance"*,
+*"familiarity with cloud environments and common cloud security concepts"*),
+fingerprint's "Senior Engineering Manager, Security & IT", and OpenAI's
+"Software Engineer, Infrastructure Security" — real stated needs, not summaries.
+
+**Three iterations were needed to make the output honest:**
+
+1. First pass padded results with legal boilerplate. *"you have read Affirm's
+   Global Candidate Privacy Notice"* trips the "you have" requirement hint, so
+   affirm's needs came back as privacy notices and pay grades. Added a
+   boilerplate blocklist and stopped padding to `limit` — an honest "nothing
+   stated" beats filler.
+2. Second pass ranked by recency, so `--area security` returned thin 80k roles
+   where the term appeared only in a company blurb. Added relevance scoring
+   (title match, count of on-term requirement lines, tag match) so roles that
+   *say* something about the area sort first.
+3. `extract_needs()` silently degraded when handed raw HTML instead of plain
+   text: `splitlines()` saw one long line, so a single boilerplate phrase
+   anywhere in the markup discarded the whole description. Found by my own test
+   making that mistake. Normalised inside the function rather than documenting
+   the trap.
+
+**Scope held deliberately narrow**, per the Compass's own warning that building a
+tracking system for the heading-check is the difficulty-trap. A test asserts the
+output contains no alignment score, percentage-fit, or "next brick"
+recommendation, and that it says so explicitly. The judgment stays with Saif.
+
+**Bias is surfaced, not buried.** The banner prints corpus composition every run
+and adds an explicit caveat when a single source exceeds 40% — currently 67%
+from 80,000 Hours. `DevSecOps` and `duckdb` return zero roles, and without the
+caveat that reads as market signal when it is composition. A test covers the
+caveat firing.
+
+One role per organisation, because wolt alone has 233 open roles and breadth is
+what a heading-check needs.
+
+**Suite:** 255 passed (was 236).
+
+**Blockers:** —
+**Artifacts:** `src/compass.py`, `src/cli.py`, `Makefile`, `README.md`,
+`tests/test_compass.py`, `~/.agent-memory/research/scout-role-corpus.md`
+**Closed:** 2026-09-10

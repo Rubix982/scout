@@ -109,3 +109,39 @@ Opened T-006 for source harvesting, explicitly out of v1.
 `threads.md` → T-006
 
 **Closed:** 2026-09-08
+
+---
+
+### O-004 · Decide whether Scout writes to the Google Sheet
+
+**Status:** closed
+**Type:** coordinate
+**Priority:** medium
+**Created:** 2026-09-10 (retroactively — see the process note below)
+**Updated:** 2026-09-10
+
+**Description:**
+Saif asked whether Scout could populate the sheet's new `Type` and `Board URL`
+columns programmatically instead of by hand. Tracing the write use cases found
+exactly one — a one-time pre-fill of 36 cells — against a permanent widening of
+the credential from read-only to read-write on six months of hand-curated data,
+in a public repository.
+
+Resolved: the sheet is **input-only**; Scout stays read-only; the unused
+`drive.readonly` scope was dropped, leaving a single `spreadsheets.readonly`
+scope. The pre-fill was delivered as a paste-ready TSV
+(`agents/shared/sheet_columns_D_E.tsv`) instead.
+
+**Process note (rule 7 break):** the decision was written to
+`agents/shared/decisions.md` as `[O-004]` during the session, before this ticket
+existed — work recorded against an ID that had no ticket behind it. Discipline
+rule 7 says no work begins without a ticket open first, and rule 4 makes the
+shared surface append-only, so the decision entry cannot be relabelled. The
+ticket is therefore created here to make the ledger consistent, with the break
+recorded rather than hidden. The lesson is narrow: a decision that arises from
+answering a question still needs its ticket opened before it is written down.
+
+**Artifacts:** `agents/shared/decisions.md` → "[O-004] The sheet is input-only",
+`agents/shared/sheet_columns_D_E.tsv`, `src/clients/gsuite.py`
+
+**Closed:** 2026-09-10

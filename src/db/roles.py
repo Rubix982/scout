@@ -20,6 +20,7 @@ never detect changes on Lever or Ashby.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
@@ -176,14 +177,17 @@ def snapshot_company(
                 INSERT INTO roles (
                   platform, token, external_id, company_name, title, location,
                   department, url, first_published, updated_at, raw,
+                  tags, is_evergreen,
                   first_seen, last_seen, closed_at, first_seen_run, last_seen_run
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                           CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, NULL, ?, ?)
                 """,
                 [
                     role.platform, role.token, role.external_id, company_name,
                     role.title, role.location, role.department, role.url,
                     role.first_published, role.updated_at, role.raw,
+                    json.dumps(list(role.tags)) if role.tags else None,
+                    role.evergreen_flag,
                     run_id, run_id,
                 ],
             )
@@ -220,12 +224,15 @@ def snapshot_company(
             UPDATE roles SET
               title = ?, location = ?, department = ?, url = ?,
               first_published = ?, updated_at = ?, raw = ?,
+              tags = ?, is_evergreen = ?,
               last_seen = CURRENT_TIMESTAMP, last_seen_run = ?, closed_at = NULL
             WHERE platform = ? AND token = ? AND external_id = ?
             """,
             [
                 role.title, role.location, role.department, role.url,
-                role.first_published, role.updated_at, role.raw, run_id,
+                role.first_published, role.updated_at, role.raw,
+                json.dumps(list(role.tags)) if role.tags else None,
+                role.evergreen_flag, run_id,
                 role.platform, role.token, role.external_id,
             ],
         )
@@ -276,12 +283,33 @@ class OpenRole:
     url: str
     first_published: Optional[str]
     first_seen_run: Optional[int]
+    tags_json: Optional[str] = None
+    is_evergreen_flag: Optional[bool] = None
+
+    @property
+    def tags(self) -> List[str]:
+        if not self.tags_json:
+            return []
+        try:
+            return list(json.loads(self.tags_json))
+        except Exception:
+            return []
+
+    @property
+    def evergreen(self) -> bool:
+        """Source flag when present, title heuristic otherwise."""
+        if self.is_evergreen_flag is not None:
+            return bool(self.is_evergreen_flag)
+        from src.common.models import is_evergreen
+
+        return is_evergreen(self.title)
 
 
 def open_roles(company_name: Optional[str] = None) -> List[OpenRole]:
     sql = (
         "SELECT company_name, platform, external_id, title, location, department, "
-        "url, first_published, first_seen_run FROM roles WHERE closed_at IS NULL"
+        "url, first_published, first_seen_run, tags, is_evergreen "
+        "FROM roles WHERE closed_at IS NULL"
     )
     params: List[object] = []
     if company_name:
@@ -289,6 +317,24 @@ def open_roles(company_name: Optional[str] = None) -> List[OpenRole]:
         params.append(company_name)
     sql += " ORDER BY company_name, title"
     return [OpenRole(*row) for row in get_con().execute(sql, params).fetchall()]
+
+
+def companies_with_open_roles_from(platform: str) -> List[str]:
+    """Companies that currently have open roles attributed to `platform`.
+
+    Used for source-level closing: a feed is fetched whole, so a company absent
+    from a *successful* fetch really has no live roles there any more.
+    """
+    return [
+        r[0]
+        for r in get_con()
+        .execute(
+            "SELECT DISTINCT company_name FROM roles "
+            "WHERE platform = ? AND closed_at IS NULL",
+            [platform],
+        )
+        .fetchall()
+    ]
 
 
 def latest_completed_run() -> Optional[int]:

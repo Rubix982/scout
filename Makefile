@@ -35,6 +35,12 @@ snapshot:
 report:
 	$(PY) -m src.cli report
 
+# Reading material for the Compass heading-check, e.g.
+#   make compass AREA=security
+.PHONY: compass
+compass:
+	$(PY) -m src.cli compass --area $(AREA)
+
 # Note: there is deliberately no `activate` target. Each recipe line runs in its
 # own subshell, so `source .venv/bin/activate` in a Makefile cannot affect the
 # caller's shell -- the old target silently did nothing. Use `make venv` to build
