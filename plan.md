@@ -205,6 +205,9 @@ Execution order, not ID order.
 - E-003 · Adapters live — 477/477 roles normalised across Greenhouse, Lever, Ashby
 - E-005 · Snapshots + diffing live — 477 roles tracked, closed/reopened verified on real data
 - E-006 · Report live — **v1 deliverable met**; caught 5 real wolt closures unprompted
+- R-003 · 80,000 Hours assessed — no API at the cited URLs, but a public Algolia index with 937 jobs / 386 companies
+- O-004 · Sheet stays read-only (ticket opened retroactively; rule-7 break recorded)
+- D-001 · README rewritten against the shipped system — 32KB → 12KB, old design archived
 
 ## Next Orchestrator Action
 
@@ -218,10 +221,12 @@ Two things now compete for next:
 1. **Coverage.** 5 of 13 employers have a board URL. Adding the rest (see
    `agents/shared/employers_needing_board_urls.md`) is Saif's input, not
    engineering work — `ada engage` is confirmed on Greenhouse and most valuable.
-2. **The README.** Still 32KB describing the cold-outreach engine, and now the
-   single most misleading artifact in the repo: a second engineer reading it
-   would build the wrong system. `agents/documentor/tickets.md` flags this; the
-   ingestion shape is settled, so a `D-` ticket is now appropriate.
+2. ~~**The README.**~~ Done — D-001. Rewritten against the shipped system;
+   the outreach design is archived at `docs/outreach-design-archive.md`.
+3. **80,000 Hours as a source.** R-003 found no API at the cited URLs but a
+   public Algolia index behind the job board: 937 jobs, 386 companies, zero
+   overlap with the sheet. Awaiting a decision on integration shape — role feed
+   vs. company discovery — before any implement ticket opens.
 
 Deferred by design: E-004 (automatic resolution, Phase 3), T-002 (refresh
 cadence — now answerable as history accumulates), T-003, T-004, T-006.

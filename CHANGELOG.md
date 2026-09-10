@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-09-10 · Session 2
+
+- [D-001] README rewritten against the shipped system — 32KB → 12KB; outreach design archived to `docs/outreach-design-archive.md`; claims verified against the code
+- [R-003] 80,000 Hours assessed — no API at either cited URL; the job board runs a public Algolia index (937 jobs, 386 companies, zero overlap with the sheet). Findings in `agents/shared/findings.md`
+- [O-004] Sheet stays read-only, OAuth narrowed to one scope — ticket opened retroactively, rule-7 break recorded on the ticket
+
 ## 2026-09-08 · Session 1 (revival)
 
 - [R-001] ATS endpoint feasibility measured — findings in `agents/shared/findings.md`, probe scripts in `agents/researcher/findings/`
