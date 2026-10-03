@@ -3,7 +3,7 @@ cffi==2.1.1
 charset-normalizer==3.5.1
 coverage==7.16.0
 cryptography==50.0.1
-duckdb==1.5.5
+duckdb==1.5.6
 google-auth==2.57.1
 google-auth-oauthlib==1.4.1
 gspread==6.2.1
