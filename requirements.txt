@@ -21,4 +21,4 @@ pytest-cov==7.1.0
 python-dotenv==1.2.3
 requests==2.34.2
 requests-oauthlib==2.0.0
-urllib3==2.7.0
+urllib3==2.8.0
